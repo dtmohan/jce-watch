@@ -296,6 +296,23 @@
 
   <div class="panel">
 
+    <!-- Focus indicator -->
+    <div class="card">
+      <div class="card-title">Focus</div>
+      <div id="focusDisp" style="font-size:12px; font-style:italic; color:var(--dim);">All planets — click one to isolate</div>
+    </div>
+
+    <!-- JCE Frame -->
+    <div class="card">
+      <div class="card-title">JCE Frame (Note 1–7)</div>
+      <div id="ayanamshaDisp" style="font-size:12px; color:var(--gold2); margin-bottom:8px;">Lahiri ayanamsha: —</div>
+      <div id="abhijitDisp" style="font-size:11px; color:var(--dim); line-height:1.6;"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button id="btnSidereal" class="active">Sidereal ✦</button>
+        <button id="btnTropical">Tropical</button>
+      </div>
+    </div>
+
     <!-- Epoch -->
     <div class="card">
       <div class="card-title">Current Epoch</div>
@@ -346,13 +363,12 @@
         <span style="color:var(--rahu)">━</span> Rahu ring (18.6 yr)<br>
         <span style="color:var(--ketu)">◆</span> Ketu needle (differential)<br>
         <span style="color:var(--moon)">●</span> Moon · <span style="color:var(--sun)">●</span> Sun<br>
-        <span style="color:var(--mercury)">●</span> Mercury · <span style="color:var(--venus)">●</span> Venus<br>
-        <span style="color:var(--mars)">●</span> Mars · <span style="color:var(--jupiter)">●</span> Jupiter<br>
-        <span style="color:var(--saturn)">●</span> Saturn<br>
-        <span style="color:var(--ketu)">◌ ℞</span> Retrograde — Ketu moment<br>
-        <span style="color:var(--ketu)">━</span> Trail: retrograde arc<br>
-        <span style="color:var(--gold)">━</span> Trail: direct motion<br>
-        <em style="font-size:11px;">Face tilted 23.44° (ecliptic obliquity)</em>
+        <span style="color:var(--mercury)">●</span> ☿ · <span style="color:var(--venus)">●</span> ♀ · <span style="color:var(--mars)">●</span> ♂ · <span style="color:var(--jupiter)">●</span> ♃ · <span style="color:var(--saturn)">●</span> ♄<br>
+        <span style="color:var(--ketu)">◌ ℞</span> Retrograde (Ketu zero-crossing)<br>
+        <span style="color:#4CA8C9">━ GC-N</span> Galactic crossing N (Note 5)<br>
+        <span style="color:#C94C6A">━ GC-S</span> Galactic crossing S / Mula<br>
+        <span style="color:#F5E5A0">◆</span> Exaltation degrees · <span style="color:#F5E5A0">✦</span> Abhijit band<br>
+        <em style="font-size:11px;">Face tilted 23.44° · Sidereal = Lahiri ayanamsha</em>
       </div>
     </div>
 
@@ -447,13 +463,26 @@ const EPOCH_DAYS = EPOCH_JD - J2000_JD;  // days since J2000
 const SPEEDS = [0, 1, 7, 30, 365, 365*5, 365*20, 365*120];
 const SPEED_LABELS = ['Paused','1 day/s','1 wk/s','1 mo/s','1 yr/s','5 yr/s','20 yr/s','120 yr/s'];
 
+// Planet labels and symbols
+const LABELS = {
+  moon:    { sym: '☽', name: 'Moon' },
+  mercury: { sym: '☿', name: 'Mercury' },
+  venus:   { sym: '♀', name: 'Venus' },
+  sun:     { sym: '☉', name: 'Sun' },
+  mars:    { sym: '♂', name: 'Mars' },
+  jupiter: { sym: '♃', name: 'Jupiter' },
+  saturn:  { sym: '♄', name: 'Saturn' },
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════════════════
-let simDays = EPOCH_DAYS;   // days since J2000
+let simDays = EPOCH_DAYS;
 let playing = false;
-let speedIdx = 4;           // default 4 = 1 yr/s
+let // ── Init
+speedIdx = 4;
 let lastTime = null;
+let selectedPlanet = null;   // null = all shown; string = isolate that planet
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CANVAS SETUP
@@ -470,21 +499,20 @@ const R_FACE = W * 0.46;    // outer radius of watch face
 // MATH HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Heliocentric x,y position (AU) for a body at days since J2000
-function helioXY(key, days) {
-  const o = HELIO[key];
-  const lon = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360 * DEG;
-  return { x: o.a * Math.cos(lon), y: o.a * Math.sin(lon) };
+// ── Lahiri ayanamsha (degrees) — derived from JCE Note 1 / Corollary 1
+// Zero point: ~285 CE (making Sun exalt at 10° sidereal = 10.9° precession since ~500 BCE encoding)
+// Rate: 50.3 arcseconds/year = IAU standard
+function ayanamsha(days) {
+  return 23.85 + days * (50.3 / 3600) / 365.25;
 }
 
-// Geocentric ecliptic longitude (degrees) — produces retrograde naturally
+// ── Geocentric tropical longitude
 function getAngle(body, days) {
   if (body === 'moon' || body === 'rahu') {
     return ((GEO_L0[body] + 360 * days / GEO_PERIODS[body]) % 360 + 360) % 360;
   }
   const earth = helioXY('earth', days);
   if (body === 'sun') {
-    // Sun geocentric = opposite of Earth heliocentric
     const lon = Math.atan2(-earth.y, -earth.x) / DEG;
     return (lon % 360 + 360) % 360;
   }
@@ -493,6 +521,24 @@ function getAngle(body, days) {
   const gy = planet.y - earth.y;
   const lon = Math.atan2(gy, gx) / DEG;
   return (lon % 360 + 360) % 360;
+}
+
+// ── Sidereal longitude (Lahiri) — JCE-correct frame
+function getSiderealAngle(body, days) {
+  return ((getAngle(body, days) - ayanamsha(days)) % 360 + 360) % 360;
+}
+
+// ── Display angle: sidereal or tropical depending on mode
+let siderealMode = true;   // default: sidereal (JCE-correct)
+function displayAngle(body, days) {
+  return siderealMode ? getSiderealAngle(body, days) : getAngle(body, days);
+}
+
+// Heliocentric x,y position (AU) for a body at days since J2000
+function helioXY(key, days) {
+  const o = HELIO[key];
+  const lon = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360 * DEG;
+  return { x: o.a * Math.cos(lon), y: o.a * Math.sin(lon) };
 }
 
 // Is a planet currently retrograde? Compare longitude 0.5 day apart
@@ -506,12 +552,77 @@ function isRetrograde(body, days) {
   return diff < 0;
 }
 
+// ── JCE Structural Constants (all sidereal degrees, from Notes 1–7)
+// Galactic-ecliptic crossings (Note 5)
+const GALACTIC_CROSSINGS = [
+  { lon: 66.0,  label: 'GC-N', color: '#4CA8C9', note: 'Summer solstice galactic crossing\nRahu exaltation region\nEcliptic enters galactic N. hemisphere' },
+  { lon: 246.0, label: 'GC-S', color: '#C94C6A', note: 'Winter solstice galactic crossing\nKetu/Mula — galactic center direction\nSgr A* at 242.84° (Mula pada 1)' },
+];
+
+// Exaltation degrees (Note 5/6) — sidereal
+const EXALT_DEGREES = [
+  { lon: 10,  body: '☉', color: '#FFD97A' },  // Sun
+  { lon: 43,  body: '☽', color: '#B8C8E8' },  // Moon
+  { lon: 60,  body: '☊', color: '#4CA8C9' },  // Rahu
+  { lon: 95,  body: '♃', color: '#C4A882' },  // Jupiter
+  { lon: 165, body: '☿', color: '#9ABCB0' },  // Mercury
+  { lon: 200, body: '♄', color: '#A8B090' },  // Saturn
+  { lon: 240, body: '☋', color: '#C94C6A' },  // Ketu
+  { lon: 298, body: '♂', color: '#C96A4C' },  // Mars
+  { lon: 357, body: '♀', color: '#D4A574' },  // Venus
+];
+
+// Abhijit band (Note 1) — sidereal
+const ABHIJIT_START = 276 + 40/60;           // 276°40'
+const ABHIJIT_END   = 280 + 53/60 + 20/3600; // 280°53'20"
+
+function isInAbhijit(siderealLon) {
+  return siderealLon >= ABHIJIT_START && siderealLon <= ABHIJIT_END;
+}
+
 // ── Planetary trail system
-const TRAIL_LEN = 180;   // keep last N positions per planet
-const TRAIL_STEP = 2;    // sample every N days of sim-time (filled each frame)
+const TRAIL_LEN = 180;
+const TRAIL_STEP = 2;
 const trails = {};
 ['mercury','venus','mars','jupiter','saturn'].forEach(b => { trails[b] = []; });
 let lastTrailDay = null;
+
+// ── Retrograde stamp system
+// Stamps record the midpoint longitude of each retrograde episode
+// prevRetro: was the planet retrograde last sample?
+// retroStart: angle when retrograde began (for midpoint calculation)
+const MAX_STAMPS = 60;  // keep last N stamps per planet
+const stamps = {};
+const prevRetro = {};
+const retroStartAngle = {};
+['mercury','venus','mars','jupiter','saturn'].forEach(b => {
+  stamps[b] = [];      // [{angle, days}]
+  prevRetro[b] = false;
+  retroStartAngle[b] = null;
+});
+
+function updateStamps(b, days) {
+  const r = isRetrograde(b, days);
+  if (!prevRetro[b] && r) {
+    retroStartAngle[b] = displayAngle(b, days);
+  }
+  if (prevRetro[b] && !r) {
+    const endAngle = displayAngle(b, days);
+    const startAngle = retroStartAngle[b];
+    if (startAngle !== null) {
+      // Midpoint: average, handling wrap
+      let mid = (startAngle + endAngle) / 2;
+      // If the retrograde crossed 0°/360°, adjust
+      let diff = endAngle - startAngle;
+      if (diff > 180)  diff -= 360;
+      if (diff < -180) diff += 360;
+      mid = ((startAngle + diff / 2) % 360 + 360) % 360;
+      stamps[b].push({ angle: mid, days });
+      if (stamps[b].length > MAX_STAMPS) stamps[b].shift();
+    }
+  }
+  prevRetro[b] = r;
+}
 
 function toCanvas(angleDeg, r) {
   // 0° = right, astronomical convention: 0° Aries at top, increasing CCW
@@ -614,13 +725,17 @@ function drawWatch(days) {
   ctx.setLineDash([]);
   ctx.restore();
 
-  // ── Zodiac belt
+  // ── Zodiac belt — sidereal frame (fixed to stars, not VE)
   const ZODIAC_INNER = R_FACE * 0.84;
   const ZODIAC_OUTER = R_FACE * 0.96;
   const zodiacGlyph = ['♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓'];
+
+  // In sidereal mode: 0° sidereal Aries is at top of face
+  // In tropical mode: 0° tropical Aries (VE) is at top — shift belt by ayanamsha
+  const beltOffset = siderealMode ? 0 : 0;  // belt always sidereal; planets shift
+
   for (let s = 0; s < 12; s++) {
-    const startAngle = (s * 30 - 90) * DEG;
-    const endAngle   = ((s + 1) * 30 - 90) * DEG;
+    const startAngle = (s * 30 + beltOffset - 90) * DEG;
     // dividers
     ctx.beginPath();
     ctx.moveTo(CX + ZODIAC_INNER * Math.cos(startAngle), CY + ZODIAC_INNER * Math.sin(startAngle));
@@ -629,7 +744,7 @@ function drawWatch(days) {
     ctx.lineWidth = 0.5;
     ctx.stroke();
     // glyph
-    const midAngle = (s * 30 + 15 - 90) * DEG;
+    const midAngle = (s * 30 + 15 + beltOffset - 90) * DEG;
     const gr = (ZODIAC_INNER + ZODIAC_OUTER) / 2;
     ctx.save();
     ctx.translate(CX + gr * Math.cos(midAngle), CY + gr * Math.sin(midAngle));
@@ -647,8 +762,76 @@ function drawWatch(days) {
   ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_OUTER, 0, TWO_PI);
   ctx.stroke();
 
+  // ── Abhijit band (Note 1) — 276°40' to 280°53'20" sidereal
+  {
+    const a1 = (ABHIJIT_START + beltOffset - 90) * DEG;
+    const a2 = (ABHIJIT_END   + beltOffset - 90) * DEG;
+    ctx.beginPath();
+    ctx.arc(CX, CY, ZODIAC_INNER - 2, a1, a2);
+    ctx.arc(CX, CY, ZODIAC_OUTER + 2, a2, a1, true);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(245,229,160,0.12)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245,229,160,0.5)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // label
+    const aMid = (ABHIJIT_START + (ABHIJIT_END - ABHIJIT_START)/2 + beltOffset - 90) * DEG;
+    const aLabelR = ZODIAC_OUTER + 9;
+    ctx.save();
+    ctx.translate(CX + aLabelR * Math.cos(aMid), CY + aLabelR * Math.sin(aMid));
+    ctx.rotate(aMid + Math.PI/2);
+    ctx.font = 'bold 7px Cinzel, serif';
+    ctx.fillStyle = 'rgba(245,229,160,0.8)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('✦', 0, 0);
+    ctx.restore();
+  }
+
+  // ── Galactic crossing markers (Note 5) — 66° and 246° sidereal
+  GALACTIC_CROSSINGS.forEach(gc => {
+    const gcRad = (gc.lon + beltOffset - 90) * DEG;
+    const gcR1 = ZODIAC_INNER - 4;
+    const gcR2 = ZODIAC_OUTER + 4;
+    ctx.beginPath();
+    ctx.moveTo(CX + gcR1 * Math.cos(gcRad), CY + gcR1 * Math.sin(gcRad));
+    ctx.lineTo(CX + gcR2 * Math.cos(gcRad), CY + gcR2 * Math.sin(gcRad));
+    ctx.strokeStyle = gc.color;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.7;
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+    // small label
+    ctx.save();
+    ctx.translate(CX + (gcR2 + 8) * Math.cos(gcRad), CY + (gcR2 + 8) * Math.sin(gcRad));
+    ctx.rotate(gcRad + Math.PI/2);
+    ctx.font = 'bold 7px Cinzel, serif';
+    ctx.fillStyle = gc.color;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(gc.label, 0, 0);
+    ctx.restore();
+  });
+
+  // ── Exaltation degree marks (Note 5/6) — tiny colored diamonds on belt inner edge
+  EXALT_DEGREES.forEach(ex => {
+    const exRad = (ex.lon + beltOffset - 90) * DEG;
+    const exR = ZODIAC_INNER - 1;
+    const p = { x: CX + exR * Math.cos(exRad), y: CY + exR * Math.sin(exRad) };
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(exRad);
+    ctx.beginPath();
+    ctx.moveTo(0, -4); ctx.lineTo(2, 0); ctx.lineTo(0, 4); ctx.lineTo(-2, 0);
+    ctx.closePath();
+    ctx.fillStyle = ex.color;
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+  });
+
   // ── Rahu ring — slow retrograde, outermost display ring
-  const rahuAngle = getAngle('rahu', days);
+  const rahuAngle = displayAngle('rahu', days);
   const ketuAngle = (rahuAngle + 180) % 360;
   const R_RAHU = ZODIAC_INNER - 6;
   // Draw Rahu arc (glowing band, 40° arc around Rahu point)
@@ -703,46 +886,152 @@ function drawWatch(days) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // ── Planetary trails — show retrograde loops
+  // ── Retrograde stamps — midpoint markers on orbit ring
+  // Venus: draw pentagram lines connecting stamps in occurrence order
+  if (stamps.venus.length >= 2) {
+    const dimVenus = selectedPlanet !== null && selectedPlanet !== 'venus';
+    ctx.save();
+    ctx.globalAlpha = dimVenus ? 0.05 : 0.35;
+    ctx.strokeStyle = COL.venus;
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([3, 4]);
+    // Connect successive stamps across the face interior
+    for (let i = 1; i < stamps.venus.length; i++) {
+      const p0 = toCanvas(stamps.venus[i-1].angle, ORBITS.venus * 0.55);
+      const p1 = toCanvas(stamps.venus[i].angle,   ORBITS.venus * 0.55);
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // All planets: draw a small tick on the orbit ring at each stamp
+  const stampBodies = ['mercury','venus','mars','jupiter','saturn'];
+  stampBodies.forEach(b => {
+    if (stamps[b].length === 0) return;
+    const dimmed = selectedPlanet !== null && selectedPlanet !== b;
+    const r = ORBITS[b];
+    const hex = COL[b].replace('#','');
+    const cr = parseInt(hex.slice(0,2),16);
+    const cg = parseInt(hex.slice(2,4),16);
+    const cb = parseInt(hex.slice(4,6),16);
+
+    stamps[b].forEach((s, idx) => {
+      const age = stamps[b].length - 1 - idx;  // 0 = newest
+      const ageFrac = age / Math.max(stamps[b].length - 1, 1);
+      const alpha = (1 - ageFrac * 0.7) * (dimmed ? 0.08 : 0.85);
+
+      // Small diamond on the orbit ring
+      const p = toCanvas(s.angle, r);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate((s.angle - 90) * DEG);
+
+      // Diamond shape: 3px × 5px tick pointing radially outward
+      ctx.beginPath();
+      ctx.moveTo(0, -5);
+      ctx.lineTo(2.5, 0);
+      ctx.lineTo(0, 5);
+      ctx.lineTo(-2.5, 0);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(${cr},${cg},${cb},1)`;
+      ctx.fill();
+
+      // For Mercury: also draw the sequence number (mod 3) so you can see
+      // which of the three annual retrogrades this is
+      if (b === 'mercury' && !dimmed && stamps[b].length <= 24) {
+        const seqNum = (idx % 3) + 1;
+        ctx.font = '7px Cinzel, serif';
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},0.9)`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.rotate(-(s.angle - 90) * DEG); // un-rotate for text
+        ctx.fillText(seqNum, 0, -11);
+      }
+
+      ctx.restore();
+    });
+
+    // Label the gap for Mercury: draw the ~17° annual precession arc
+    if (b === 'mercury' && stamps.mercury.length >= 4 && !dimmed) {
+      // Find the gap between the last stamp of one year-group and first of next
+      // Approximate: every 3rd stamp pair should show a ~17° gap vs ~114° gaps
+      // Just annotate the latest stamp cluster
+    }
+  });
+
+  // ── Planetary trails — per-planet color, isolation support
   Object.keys(trails).forEach(b => {
     const tr = trails[b];
     if (tr.length < 2) return;
     const r = ORBITS[b];
+    const dimmed = selectedPlanet !== null && selectedPlanet !== b;
+    const baseAlphaScale = dimmed ? 0.08 : 1.0;
+    // Parse planet color to rgb for trail
+    const hex = COL[b].replace('#','');
+    const cr = parseInt(hex.slice(0,2),16);
+    const cg = parseInt(hex.slice(2,4),16);
+    const cb = parseInt(hex.slice(4,6),16);
+
     for (let i = 1; i < tr.length; i++) {
-      const alpha = (i / tr.length) * 0.55;
+      const frac = i / tr.length;
+      const alpha = frac * 0.65 * baseAlphaScale;
       const p0 = toCanvas(tr[i-1].angle, r);
       const p1 = toCanvas(tr[i].angle, r);
-      // retrograde segment = ketu-coloured, direct = dim gold
       const isR = tr[i].retro;
       ctx.beginPath();
       ctx.moveTo(p0.x, p0.y);
       ctx.lineTo(p1.x, p1.y);
-      ctx.strokeStyle = isR
-        ? `rgba(201,76,106,${alpha})`
-        : `rgba(201,168,76,${alpha * 0.5})`;
-      ctx.lineWidth = isR ? 1.5 : 0.8;
+      if (isR) {
+        // Retrograde: bright ketu-pink tinted with planet color
+        ctx.strokeStyle = `rgba(220,80,120,${alpha * 1.4})`;
+        ctx.lineWidth = dimmed ? 0.5 : 2;
+      } else {
+        // Direct: planet's own color, softer
+        ctx.strokeStyle = `rgba(${cr},${cg},${cb},${alpha * 0.7})`;
+        ctx.lineWidth = dimmed ? 0.4 : 1;
+      }
       ctx.stroke();
     }
   });
 
-  // ── Planets
+  // ── Planets + labels
   const planetList = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
   planetList.forEach(b => {
-    const angle = getAngle(b, days);
+    const angle = displayAngle(b, days);
     const r = ORBITS[b];
     const p = toCanvas(angle, r);
     const sz = SIZES[b];
+    const dimmed = selectedPlanet !== null && selectedPlanet !== b;
+    const highlighted = selectedPlanet === b;
+    const globalAlpha = dimmed ? 0.2 : 1.0;
+
+    ctx.save();
+    ctx.globalAlpha = globalAlpha;
 
     // Glow
-    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sz * 3);
-    glow.addColorStop(0, COL[b] + 'AA');
+    const glowR = highlighted ? sz * 5 : sz * 3;
+    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
+    glow.addColorStop(0, COL[b] + (highlighted ? 'DD' : 'AA'));
     glow.addColorStop(1, COL[b] + '00');
-    ctx.beginPath(); ctx.arc(p.x, p.y, sz * 3, 0, TWO_PI);
+    ctx.beginPath(); ctx.arc(p.x, p.y, glowR, 0, TWO_PI);
     ctx.fillStyle = glow; ctx.fill();
 
-    // Planet
+    // Planet dot
     ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, TWO_PI);
     ctx.fillStyle = COL[b]; ctx.fill();
+
+    // Highlight ring when selected
+    if (highlighted) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, sz + 5, 0, TWO_PI);
+      ctx.strokeStyle = COL[b] + 'CC';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
 
     // Retrograde ring — Ketu marker
     const retro = isRetrograde(b, days);
@@ -766,6 +1055,26 @@ function drawWatch(days) {
       ctx.lineWidth = 1.5; ctx.stroke();
       ctx.restore();
     }
+
+    ctx.restore(); // restore globalAlpha
+
+    // ── Planet label — always drawn at full alpha but fades when dimmed
+    const labelAlpha = dimmed ? 0.15 : (highlighted ? 1.0 : 0.75);
+    // Position label outward from center
+    const labelAngle = (angle - 90) * DEG;
+    const labelR = r + sz + 11;
+    const lx = CX + labelR * Math.cos(labelAngle);
+    const ly = CY + labelR * Math.sin(labelAngle);
+    const lbl = LABELS[b];
+    ctx.save();
+    ctx.globalAlpha = labelAlpha;
+    ctx.font = `${highlighted ? 'bold ' : ''}10px Cinzel, serif`;
+    ctx.fillStyle = COL[b];
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Symbol only at normal speed; sym+name when highlighted
+    ctx.fillText(highlighted ? `${lbl.sym} ${lbl.name}` : lbl.sym, lx, ly);
+    ctx.restore();
   });
 
   // ── Centre jewel
@@ -844,22 +1153,44 @@ function updateUI(days) {
     { key: 'saturn',  label: '♄ Saturn' },
   ];
   const tbl = document.getElementById('planetTable');
+  const ay = ayanamsha(days);
   tbl.innerHTML = bodies2.map(b => {
-    const a = getAngle(b.key, days);
+    const a = displayAngle(b.key, days);
     const retro = isRetrograde(b.key, days);
     const rxBadge = retro
-      ? `<span style="color:#C94C6A;font-family:'Cinzel',serif;font-size:10px;margin-left:4px;letter-spacing:0.05em" title="Retrograde — Ketu moment">℞</span>`
+      ? `<span style="color:#C94C6A;font-family:'Cinzel',serif;font-size:10px;margin-left:4px" title="Retrograde — Ketu moment">℞</span>`
+      : '';
+    // Abhijit badge for Moon
+    const moonSid = getSiderealAngle('moon', days);
+    const abhijitBadge = (b.key === 'moon' && isInAbhijit(moonSid))
+      ? `<span style="color:#F5E5A0;font-family:'Cinzel',serif;font-size:9px;margin-left:4px" title="Moon in Abhijit — correction node active">✦</span>`
       : '';
     return `<div class="planet-row">
       <span class="planet-dot" style="background:${COL[b.key]}"></span>
-      <span class="planet-name">${b.label}${rxBadge}</span>
+      <span class="planet-name">${b.label}${rxBadge}${abhijitBadge}</span>
       <span class="planet-deg">${fmtDeg(a)}</span>
       <span class="planet-sign">${signOf(a).split(' ')[1]}</span>
     </div>`;
   }).join('');
 
+  // Ayanamsha display
+  const ayEl = document.getElementById('ayanamshaDisp');
+  if (ayEl) {
+    ayEl.textContent = `Lahiri ayanamsha: ${ay.toFixed(4)}°`;
+    // Check Abhijit
+    const moonSid2 = getSiderealAngle('moon', days);
+    const abhEl = document.getElementById('abhijitDisp');
+    if (abhEl) {
+      if (isInAbhijit(moonSid2)) {
+        abhEl.innerHTML = `<span style="color:#F5E5A0">✦ Moon in Abhijit (${moonSid2.toFixed(3)}°)</span><br><span style="font-style:italic">Correction node active — dasha balance uses 4.222° span (Note 1)</span>`;
+      } else {
+        abhEl.textContent = `Moon at ${moonSid2.toFixed(2)}° sidereal`;
+      }
+    }
+  }
+
   // Nodal
-  const ra = getAngle('rahu', days);
+  const ra = displayAngle('rahu', days);
   const ka = (ra + 180) % 360;
   document.getElementById('nodalDisp').innerHTML =
     `<span style="color:var(--rahu)">☊ Rahu</span> ${fmtDeg(ra)} <em style="color:var(--dim)">${signOf(ra).split(' ')[1]}</em><br>` +
@@ -885,10 +1216,11 @@ function loop(ts) {
     for (let s = 0; s < Math.min(steps, 30); s++) {
       const d = lastTrailDay + (dayDiff / steps) * s;
       Object.keys(trails).forEach(b => {
-        const angle = getAngle(b, d);
+        const angle = displayAngle(b, d);
         const retro = isRetrograde(b, d);
         trails[b].push({ angle, retro });
         if (trails[b].length > TRAIL_LEN) trails[b].shift();
+        updateStamps(b, d);
       });
     }
     lastTrailDay = simDays;
@@ -927,14 +1259,73 @@ document.getElementById('btnPlay').addEventListener('click', () => {
 document.getElementById('btnReset').addEventListener('click', () => {
   simDays = EPOCH_DAYS;
   playing = false;
+  lastTrailDay = null;
+  Object.keys(trails).forEach(b => { trails[b] = []; });
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
   document.getElementById('btnPause').classList.add('active');
   document.getElementById('btnPlay').classList.remove('active');
 });
 
-// ── Init
-speedIdx = 4;
+// ── Canvas click: select/deselect planet
+canvas.style.cursor = 'crosshair';
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top)  * scaleY;
+
+  const planetList = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
+  let hit = null;
+  let bestDist = 18; // px hit radius
+  planetList.forEach(b => {
+    const angle = getAngle(b, simDays);
+    const p = toCanvas(angle, ORBITS[b]);
+    const d = Math.hypot(mx - p.x, my - p.y);
+    if (d < bestDist) { bestDist = d; hit = b; }
+  });
+
+  if (hit === null) {
+    selectedPlanet = null;
+  } else {
+    selectedPlanet = (selectedPlanet === hit) ? null : hit;
+  }
+  updateFocusUI();
+});
+
+function updateFocusUI() {
+  const el = document.getElementById('focusDisp');
+  if (!el) return;
+  if (selectedPlanet === null) {
+    el.textContent = 'All planets — click one to isolate';
+    el.style.color = 'var(--dim)';
+  } else {
+    const lbl = LABELS[selectedPlanet];
+    el.textContent = `${lbl.sym} ${lbl.name} isolated — click again to clear`;
+    el.style.color = COL[selectedPlanet];
+  }
+}
+
+document.getElementById('btnSidereal').addEventListener('click', () => {
+  siderealMode = true;
+  lastTrailDay = null;
+  Object.keys(trails).forEach(b => { trails[b] = []; });
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  document.getElementById('btnSidereal').classList.add('active');
+  document.getElementById('btnTropical').classList.remove('active');
+});
+
+document.getElementById('btnTropical').addEventListener('click', () => {
+  siderealMode = false;
+  lastTrailDay = null;
+  Object.keys(trails).forEach(b => { trails[b] = []; });
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  document.getElementById('btnTropical').classList.add('active');
+  document.getElementById('btnSidereal').classList.remove('active');
+});
 document.getElementById('speedRange').value = speedIdx;
 updateSpeedLabel();
+updateFocusUI();
 drawWatch(simDays);
 updateUI(simDays);
 requestAnimationFrame(loop);
