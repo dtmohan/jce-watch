@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JCE Planetary Watch — From Position to Phase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold:    #C9A84C;
+    --gold2:   #E8C96A;
+    --gold3:   #F5E5A0;
+    --ivory:   #F2ECD8;
+    --copper:  #A0522D;
+    --bg:      #080A0E;
+    --bg2:     #0D1018;
+    --panel:   #10141C;
+    --text:    #C9A84C;
+    --dim:     #5A4820;
+    --rahu:    #4CA8C9;
+    --ketu:    #C94C6A;
+    --moon:    #B8C8E8;
+    --sun:     #FFD97A;
+    --mercury: #9ABCB0;
+    --venus:   #D4A574;
+    --mars:    #C96A4C;
+    --jupiter: #C4A882;
+    --saturn:  #A8B090;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ivory);
+    font-family: 'EB Garamond', serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    text-align: center;
+    padding: 32px 24px 12px;
+    border-bottom: 1px solid var(--dim);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .title-main {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(18px, 3vw, 28px);
+    color: var(--gold);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .title-sub {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(11px, 1.5vw, 14px);
+    color: var(--dim);
+    letter-spacing: 0.3em;
+    margin-top: 6px;
+  }
+
+  /* ── Main layout ── */
+  .main {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 32px;
+    padding: 32px 16px 48px;
+    width: 100%;
+    max-width: 1200px;
+  }
+
+  /* ── Watch container ── */
+  .watch-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  canvas {
+    display: block;
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 2px var(--dim),
+      0 0 0 6px #1A1608,
+      0 0 0 8px var(--dim),
+      0 0 60px rgba(201,168,76,0.15),
+      0 0 120px rgba(201,168,76,0.05);
+  }
+
+  /* ── Side panel ── */
+  .panel {
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-top: 8px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--dim);
+    border-radius: 4px;
+    padding: 16px 18px;
+    position: relative;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 8%; right: 8%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .card-title {
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* Dasha display */
+  .dasha-lord {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 22px;
+    color: var(--gold2);
+    letter-spacing: 0.1em;
+  }
+  .dasha-years {
+    font-size: 13px;
+    color: var(--dim);
+    margin-top: 4px;
+    font-style: italic;
+  }
+  .dasha-bar-wrap {
+    margin-top: 10px;
+    height: 4px;
+    background: #1a1608;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .dasha-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--gold2));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+  .dasha-next {
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 8px;
+    font-style: italic;
+  }
+
+  /* Planet table */
+  .planet-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid #15180E08;
+    font-size: 13px;
+  }
+  .planet-row:last-child { border-bottom: none; }
+  .planet-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  .planet-name { flex: 1; }
+  .planet-deg {
+    font-family: 'Cinzel', serif;
+    font-size: 12px;
+    color: var(--gold);
+    min-width: 50px;
+    text-align: right;
+  }
+  .planet-sign {
+    font-size: 12px;
+    color: var(--dim);
+    min-width: 70px;
+    text-align: right;
+    font-style: italic;
+  }
+
+  /* Controls */
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .ctrl-label {
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+    white-space: nowrap;
+  }
+  input[type=range] {
+    flex: 1;
+    accent-color: var(--gold);
+    height: 3px;
+    cursor: pointer;
+  }
+  .ctrl-val {
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    color: var(--gold2);
+    min-width: 60px;
+    text-align: right;
+  }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  button {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--dim);
+    color: var(--gold);
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    padding: 8px 4px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  button:hover { background: var(--dim); color: var(--ivory); border-color: var(--gold); }
+  button.active { background: var(--gold); color: var(--bg); border-color: var(--gold2); }
+
+  /* Epoch display */
+  .epoch {
+    font-family: 'Cinzel', serif;
+    font-size: 13px;
+    color: var(--gold2);
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .epoch-sub {
+    font-size: 11px;
+    color: var(--dim);
+    text-align: center;
+    margin-top: 4px;
+    font-style: italic;
+  }
+
+  /* Legend */
+  .legend { font-size: 12px; color: var(--dim); line-height: 1.8; }
+
+  /* Footer */
+  footer {
+    width: 100%;
+    text-align: center;
+    padding: 16px;
+    border-top: 1px solid var(--dim);
+    font-size: 12px;
+    color: var(--dim);
+    font-style: italic;
+    letter-spacing: 0.1em;
+  }
+  footer a { color: var(--gold); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-main">JCE Planetary Watch</div>
+  <div class="title-sub">From Position to Phase &nbsp;·&nbsp; Helical Imperative Research</div>
+</header>
+
+<div class="main">
+  <div class="watch-wrap">
+    <canvas id="watch" width="560" height="560"></canvas>
+  </div>
+
+  <div class="panel">
+
+    <!-- Epoch -->
+    <div class="card">
+      <div class="card-title">Current Epoch</div>
+      <div class="epoch" id="epochDisp">—</div>
+      <div class="epoch-sub" id="jdDisp">JD —</div>
+    </div>
+
+    <!-- Time controls -->
+    <div class="card">
+      <div class="card-title">Time Control</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Speed</span>
+        <input type="range" id="speedRange" min="0" max="7" step="1" value="4">
+        <span class="ctrl-val" id="speedVal">—</span>
+      </div>
+      <div class="btn-row">
+        <button id="btnPause" class="active">⏸ Pause</button>
+        <button id="btnPlay">▶ Play</button>
+        <button id="btnReset">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- Dasha -->
+    <div class="card">
+      <div class="card-title">Vimshottari Dasha</div>
+      <div class="dasha-lord" id="dashaLord">—</div>
+      <div class="dasha-years" id="dashaYears">— yr period</div>
+      <div class="dasha-bar-wrap"><div class="dasha-bar" id="dashaBar" style="width:0%"></div></div>
+      <div class="dasha-next" id="dashaNext">Next: —</div>
+    </div>
+
+    <!-- Planet positions -->
+    <div class="card">
+      <div class="card-title">Planetary Positions</div>
+      <div id="planetTable"></div>
+    </div>
+
+    <!-- Rahu/Ketu -->
+    <div class="card">
+      <div class="card-title">Nodal Axis (Rahu / Ketu)</div>
+      <div id="nodalDisp" style="font-size:13px; line-height:1.9;"></div>
+    </div>
+
+    <!-- Legend -->
+    <div class="card">
+      <div class="card-title">Display Key</div>
+      <div class="legend">
+        <span style="color:var(--rahu)">━</span> Rahu ring (18.6 yr)<br>
+        <span style="color:var(--ketu)">◆</span> Ketu needle (differential)<br>
+        <span style="color:var(--moon)">●</span> Moon · <span style="color:var(--sun)">●</span> Sun<br>
+        <span style="color:var(--mercury)">●</span> Mercury · <span style="color:var(--venus)">●</span> Venus<br>
+        <span style="color:var(--mars)">●</span> Mars · <span style="color:var(--jupiter)">●</span> Jupiter<br>
+        <span style="color:var(--saturn)">●</span> Saturn<br>
+        <span style="color:var(--ketu)">◌ ℞</span> Retrograde — Ketu moment<br>
+        <span style="color:var(--ketu)">━</span> Trail: retrograde arc<br>
+        <span style="color:var(--gold)">━</span> Trail: direct motion<br>
+        <em style="font-size:11px;">Face tilted 23.44° (ecliptic obliquity)</em>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  Deepak T. Mohan &nbsp;·&nbsp; ORCID 0000-0001-8054-2085 &nbsp;·&nbsp;
+  <a href="https://zenodo.org" target="_blank">Zenodo</a> &nbsp;·&nbsp; CC BY 4.0
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTS & ORBITAL DATA
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TWO_PI = Math.PI * 2;
+const DEG = Math.PI / 180;
+const OBLIQUITY = 23.4392911 * DEG;
+
+// Heliocentric orbital elements at J2000.0
+// T=sidereal period (days), L0=mean longitude (deg), a=semi-major axis (AU)
+const HELIO = {
+  mercury: { T: 87.969257,  L0: 252.251, a: 0.38710 },
+  venus:   { T: 224.700799, L0: 181.980, a: 0.72333 },
+  earth:   { T: 365.256363, L0: 100.464, a: 1.00000 },
+  mars:    { T: 686.971,    L0: 355.433, a: 1.52368 },
+  jupiter: { T: 4332.589,   L0: 34.396,  a: 5.20260 },
+  saturn:  { T: 10759.22,   L0: 50.077,  a: 9.55491 },
+};
+
+// Geocentric-only bodies (no heliocentric conversion needed)
+const GEO_PERIODS = { moon: 27.321661, rahu: -6792.97 };
+const GEO_L0      = { moon: 218.316,   rahu: 125.045  };
+
+// Colors
+const COL = {
+  moon:    '#B8C8E8',
+  mercury: '#9ABCB0',
+  venus:   '#D4A574',
+  sun:     '#FFD97A',
+  mars:    '#C96A4C',
+  jupiter: '#C4A882',
+  saturn:  '#A8B090',
+  rahu:    '#4CA8C9',
+  ketu:    '#C94C6A',
+};
+
+// Orbit radii (canvas units, inner to outer)
+const ORBITS = {
+  moon:    62,
+  mercury: 92,
+  venus:   120,
+  sun:     150,
+  mars:    182,
+  jupiter: 210,
+  saturn:  238,
+};
+
+// Planet sizes
+const SIZES = {
+  moon: 4.5, mercury: 3.5, venus: 4.5, sun: 5.5,
+  mars: 4, jupiter: 5, saturn: 5,
+};
+
+// ── Zodiac signs
+const SIGNS = ['♈ Aries','♉ Taurus','♊ Gemini','♋ Cancer',
+               '♌ Leo','♍ Virgo','♎ Libra','♏ Scorpio',
+               '♐ Sagittarius','♑ Capricorn','♒ Aquarius','♓ Pisces'];
+
+// ── Vimshottari dasha sequence
+const DASHA = [
+  { lord: 'Ketu',    years: 7,  color: '#C94C6A' },
+  { lord: 'Venus',   years: 20, color: '#D4A574' },
+  { lord: 'Sun',     years: 6,  color: '#FFD97A' },
+  { lord: 'Moon',    years: 10, color: '#B8C8E8' },
+  { lord: 'Mars',    years: 7,  color: '#C96A4C' },
+  { lord: 'Rahu',    years: 18, color: '#4CA8C9' },
+  { lord: 'Jupiter', years: 16, color: '#C4A882' },
+  { lord: 'Saturn',  years: 19, color: '#A8B090' },
+  { lord: 'Mercury', years: 17, color: '#9ABCB0' },
+];
+const DASHA_TOTAL = 120; // years
+
+// J2000.0 = JD 2451545.0 = Jan 1.5 2000
+const J2000_JD = 2451545.0;
+// March 21, 2026 ≈ JD 2461121
+const EPOCH_JD = 2461121.0;  // today
+const EPOCH_DAYS = EPOCH_JD - J2000_JD;  // days since J2000
+
+// Speed steps: days per real second
+const SPEEDS = [0, 1, 7, 30, 365, 365*5, 365*20, 365*120];
+const SPEED_LABELS = ['Paused','1 day/s','1 wk/s','1 mo/s','1 yr/s','5 yr/s','20 yr/s','120 yr/s'];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════════════
+let simDays = EPOCH_DAYS;   // days since J2000
+let playing = false;
+let speedIdx = 4;           // default 4 = 1 yr/s
+let lastTime = null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CANVAS SETUP
+// ═══════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('watch');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+const CX = W / 2;
+const CY = H / 2;
+const R_FACE = W * 0.46;    // outer radius of watch face
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MATH HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Heliocentric x,y position (AU) for a body at days since J2000
+function helioXY(key, days) {
+  const o = HELIO[key];
+  const lon = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360 * DEG;
+  return { x: o.a * Math.cos(lon), y: o.a * Math.sin(lon) };
+}
+
+// Geocentric ecliptic longitude (degrees) — produces retrograde naturally
+function getAngle(body, days) {
+  if (body === 'moon' || body === 'rahu') {
+    return ((GEO_L0[body] + 360 * days / GEO_PERIODS[body]) % 360 + 360) % 360;
+  }
+  const earth = helioXY('earth', days);
+  if (body === 'sun') {
+    // Sun geocentric = opposite of Earth heliocentric
+    const lon = Math.atan2(-earth.y, -earth.x) / DEG;
+    return (lon % 360 + 360) % 360;
+  }
+  const planet = helioXY(body, days);
+  const gx = planet.x - earth.x;
+  const gy = planet.y - earth.y;
+  const lon = Math.atan2(gy, gx) / DEG;
+  return (lon % 360 + 360) % 360;
+}
+
+// Is a planet currently retrograde? Compare longitude 0.5 day apart
+function isRetrograde(body, days) {
+  if (body === 'moon' || body === 'sun' || body === 'rahu') return false;
+  const a1 = getAngle(body, days - 0.5);
+  const a2 = getAngle(body, days + 0.5);
+  let diff = a2 - a1;
+  if (diff > 180)  diff -= 360;
+  if (diff < -180) diff += 360;
+  return diff < 0;
+}
+
+// ── Planetary trail system
+const TRAIL_LEN = 180;   // keep last N positions per planet
+const TRAIL_STEP = 2;    // sample every N days of sim-time (filled each frame)
+const trails = {};
+['mercury','venus','mars','jupiter','saturn'].forEach(b => { trails[b] = []; });
+let lastTrailDay = null;
+
+function toCanvas(angleDeg, r) {
+  // 0° = right, astronomical convention: 0° Aries at top, increasing CCW
+  // We map: Aries (0°) = top of face = -PI/2
+  const rad = (angleDeg - 90) * DEG;
+  return {
+    x: CX + r * Math.cos(rad),
+    y: CY + r * Math.sin(rad),
+  };
+}
+
+function signOf(deg) {
+  return SIGNS[Math.floor(((deg % 360) + 360) % 360 / 30)];
+}
+
+function fmtDeg(d) {
+  const n = ((d % 360) + 360) % 360;
+  const sign = Math.floor(n / 30);
+  const within = n - sign * 30;
+  return within.toFixed(1) + '°';
+}
+
+function jdToDate(jd) {
+  // Convert JD to Gregorian
+  const z = Math.floor(jd + 0.5);
+  const f = jd + 0.5 - z;
+  let a;
+  if (z < 2299161) { a = z; }
+  else {
+    const alpha = Math.floor((z - 1867216.25) / 36524.25);
+    a = z + 1 + alpha - Math.floor(alpha / 4);
+  }
+  const b = a + 1524;
+  const c = Math.floor((b - 122.1) / 365.25);
+  const d = Math.floor(365.25 * c);
+  const e = Math.floor((b - d) / 30.6001);
+  const day = b - d - Math.floor(30.6001 * e);
+  const month = e < 14 ? e - 1 : e - 13;
+  const year = month > 2 ? c - 4716 : c - 4715;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${day} ${MONTHS[month-1]} ${year}`;
+}
+
+function getDasha(days) {
+  // days since J2000; map to 120-yr cycle
+  const years = days / 365.2564;
+  const cycleYears = ((years % DASHA_TOTAL) + DASHA_TOTAL) % DASHA_TOTAL;
+  let accum = 0;
+  for (let i = 0; i < DASHA.length; i++) {
+    accum += DASHA[i].years;
+    if (cycleYears < accum) {
+      const start = accum - DASHA[i].years;
+      const elapsed = cycleYears - start;
+      const frac = elapsed / DASHA[i].years;
+      const remaining = DASHA[i].years - elapsed;
+      const next = DASHA[(i + 1) % DASHA.length];
+      return { lord: DASHA[i].lord, years: DASHA[i].years,
+               color: DASHA[i].color, frac, remaining, next: next.lord };
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DRAWING
+// ═══════════════════════════════════════════════════════════════════════════
+
+function drawWatch(days) {
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Background
+  const bgGrad = ctx.createRadialGradient(CX, CY, 0, CX, CY, R_FACE);
+  bgGrad.addColorStop(0,   '#111420');
+  bgGrad.addColorStop(0.6, '#0A0D14');
+  bgGrad.addColorStop(1,   '#060810');
+  ctx.beginPath();
+  ctx.arc(CX, CY, R_FACE, 0, TWO_PI);
+  ctx.fillStyle = bgGrad;
+  ctx.fill();
+
+  // ── Bezel glow
+  ctx.beginPath();
+  ctx.arc(CX, CY, R_FACE, 0, TWO_PI);
+  ctx.strokeStyle = 'rgba(201,168,76,0.25)';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(201,168,76,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // ── Tilt mark (obliquity) — subtle diagonal line
+  ctx.save();
+  ctx.rotate(OBLIQUITY);
+  ctx.strokeStyle = 'rgba(201,168,76,0.08)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 8]);
+  ctx.beginPath();
+  ctx.moveTo(CX - R_FACE * 0.9, CY);
+  ctx.lineTo(CX + R_FACE * 0.9, CY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // ── Zodiac belt
+  const ZODIAC_INNER = R_FACE * 0.84;
+  const ZODIAC_OUTER = R_FACE * 0.96;
+  const zodiacGlyph = ['♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓'];
+  for (let s = 0; s < 12; s++) {
+    const startAngle = (s * 30 - 90) * DEG;
+    const endAngle   = ((s + 1) * 30 - 90) * DEG;
+    // dividers
+    ctx.beginPath();
+    ctx.moveTo(CX + ZODIAC_INNER * Math.cos(startAngle), CY + ZODIAC_INNER * Math.sin(startAngle));
+    ctx.lineTo(CX + ZODIAC_OUTER * Math.cos(startAngle), CY + ZODIAC_OUTER * Math.sin(startAngle));
+    ctx.strokeStyle = 'rgba(201,168,76,0.3)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    // glyph
+    const midAngle = (s * 30 + 15 - 90) * DEG;
+    const gr = (ZODIAC_INNER + ZODIAC_OUTER) / 2;
+    ctx.save();
+    ctx.translate(CX + gr * Math.cos(midAngle), CY + gr * Math.sin(midAngle));
+    ctx.rotate(midAngle + Math.PI / 2);
+    ctx.font = '9px serif';
+    ctx.fillStyle = 'rgba(201,168,76,0.5)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(zodiacGlyph[s], 0, 0);
+    ctx.restore();
+  }
+  // zodiac ring borders
+  ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_INNER, 0, TWO_PI);
+  ctx.strokeStyle = 'rgba(201,168,76,0.2)'; ctx.lineWidth = 0.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_OUTER, 0, TWO_PI);
+  ctx.stroke();
+
+  // ── Rahu ring — slow retrograde, outermost display ring
+  const rahuAngle = getAngle('rahu', days);
+  const ketuAngle = (rahuAngle + 180) % 360;
+  const R_RAHU = ZODIAC_INNER - 6;
+  // Draw Rahu arc (glowing band, 40° arc around Rahu point)
+  const rahuRad = (rahuAngle - 90) * DEG;
+  ctx.beginPath();
+  ctx.arc(CX, CY, R_RAHU, rahuRad - 20 * DEG, rahuRad + 20 * DEG);
+  ctx.strokeStyle = 'rgba(76,168,201,0.6)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // Rahu marker
+  const rp = toCanvas(rahuAngle, R_RAHU);
+  ctx.beginPath(); ctx.arc(rp.x, rp.y, 5, 0, TWO_PI);
+  ctx.fillStyle = '#4CA8C9'; ctx.fill();
+
+  // Ketu arc
+  ctx.beginPath();
+  ctx.arc(CX, CY, R_RAHU, (ketuAngle - 90 - 20) * DEG, (ketuAngle - 90 + 20) * DEG);
+  ctx.strokeStyle = 'rgba(201,76,106,0.6)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  const kp = toCanvas(ketuAngle, R_RAHU);
+  ctx.beginPath(); ctx.arc(kp.x, kp.y, 4, 0, TWO_PI);
+  ctx.fillStyle = '#C94C6A'; ctx.fill();
+
+  // Labels
+  ctx.font = 'bold 9px Cinzel, serif';
+  ctx.fillStyle = '#4CA8C9';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('☊', rp.x, rp.y - 14);
+  ctx.fillStyle = '#C94C6A';
+  ctx.fillText('☋', kp.x, kp.y - 14);
+
+  // ── Orbital rings
+  const bodies = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
+  bodies.forEach(b => {
+    ctx.beginPath();
+    ctx.arc(CX, CY, ORBITS[b], 0, TWO_PI);
+    ctx.strokeStyle = `rgba(201,168,76,0.07)`;
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  });
+
+  // ── Ketu differential needle (pointing from center toward Ketu)
+  const ketuRad = (ketuAngle - 90) * DEG;
+  const needleLen = ORBITS.moon * 0.85;
+  ctx.beginPath();
+  ctx.moveTo(CX, CY);
+  ctx.lineTo(CX + needleLen * Math.cos(ketuRad), CY + needleLen * Math.sin(ketuRad));
+  ctx.strokeStyle = 'rgba(201,76,106,0.5)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── Planetary trails — show retrograde loops
+  Object.keys(trails).forEach(b => {
+    const tr = trails[b];
+    if (tr.length < 2) return;
+    const r = ORBITS[b];
+    for (let i = 1; i < tr.length; i++) {
+      const alpha = (i / tr.length) * 0.55;
+      const p0 = toCanvas(tr[i-1].angle, r);
+      const p1 = toCanvas(tr[i].angle, r);
+      // retrograde segment = ketu-coloured, direct = dim gold
+      const isR = tr[i].retro;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.strokeStyle = isR
+        ? `rgba(201,76,106,${alpha})`
+        : `rgba(201,168,76,${alpha * 0.5})`;
+      ctx.lineWidth = isR ? 1.5 : 0.8;
+      ctx.stroke();
+    }
+  });
+
+  // ── Planets
+  const planetList = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
+  planetList.forEach(b => {
+    const angle = getAngle(b, days);
+    const r = ORBITS[b];
+    const p = toCanvas(angle, r);
+    const sz = SIZES[b];
+
+    // Glow
+    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sz * 3);
+    glow.addColorStop(0, COL[b] + 'AA');
+    glow.addColorStop(1, COL[b] + '00');
+    ctx.beginPath(); ctx.arc(p.x, p.y, sz * 3, 0, TWO_PI);
+    ctx.fillStyle = glow; ctx.fill();
+
+    // Planet
+    ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, TWO_PI);
+    ctx.fillStyle = COL[b]; ctx.fill();
+
+    // Retrograde ring — Ketu marker
+    const retro = isRetrograde(b, days);
+    if (retro) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, sz + 3.5, 0, TWO_PI);
+      ctx.strokeStyle = 'rgba(201,76,106,0.8)';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([2, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Saturn ring
+    if (b === 'saturn') {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(20 * DEG);
+      ctx.scale(1, 0.4);
+      ctx.beginPath(); ctx.arc(0, 0, sz * 2.2, 0, TWO_PI);
+      ctx.strokeStyle = COL.saturn + '80';
+      ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.restore();
+    }
+  });
+
+  // ── Centre jewel
+  const cj = ctx.createRadialGradient(CX, CY, 0, CX, CY, 8);
+  cj.addColorStop(0, '#F5E5A0');
+  cj.addColorStop(0.5, '#C9A84C');
+  cj.addColorStop(1, '#5A4820');
+  ctx.beginPath(); ctx.arc(CX, CY, 6, 0, TWO_PI);
+  ctx.fillStyle = cj; ctx.fill();
+
+  // ── Filigree tick marks
+  for (let t = 0; t < 360; t += 6) {
+    const isSign = t % 30 === 0;
+    const isMajor = t % 10 === 0;
+    const len = isSign ? 14 : isMajor ? 8 : 4;
+    const inner = ZODIAC_INNER;
+    const rad = (t - 90) * DEG;
+    ctx.beginPath();
+    ctx.moveTo(CX + (inner - len) * Math.cos(rad), CY + (inner - len) * Math.sin(rad));
+    ctx.lineTo(CX + inner * Math.cos(rad), CY + inner * Math.sin(rad));
+    ctx.strokeStyle = isSign ? 'rgba(201,168,76,0.7)' : 'rgba(201,168,76,0.25)';
+    ctx.lineWidth = isSign ? 1.5 : 0.8;
+    ctx.stroke();
+  }
+
+  // ── Dasha arc indicator (outer ring segment, innermost of bezel)
+  const d = getDasha(days);
+  if (d) {
+    const arcStart = -Math.PI / 2;
+    const arcEnd   = arcStart + d.frac * TWO_PI;
+    const R_DASHA  = R_FACE * 0.795;
+    ctx.beginPath();
+    ctx.arc(CX, CY, R_DASHA, arcStart, arcEnd);
+    ctx.strokeStyle = d.color + 'CC';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
+  // ── Label: current year in centre (small, tasteful)
+  const jd = J2000_JD + days;
+  const dateStr = jdToDate(jd).split(' ');
+  ctx.font = '700 11px Cinzel, serif';
+  ctx.fillStyle = 'rgba(201,168,76,0.4)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(dateStr[2], CX, CY + 22);  // year only, subtle
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI UPDATES
+// ═══════════════════════════════════════════════════════════════════════════
+
+function updateUI(days) {
+  const jd = J2000_JD + days;
+  document.getElementById('epochDisp').textContent = jdToDate(jd);
+  document.getElementById('jdDisp').textContent = `JD ${jd.toFixed(1)}`;
+
+  // Dasha
+  const d = getDasha(days);
+  if (d) {
+    document.getElementById('dashaLord').textContent = d.lord;
+    document.getElementById('dashaLord').style.color = d.color;
+    document.getElementById('dashaYears').textContent = `${d.years}-year period · ${d.remaining.toFixed(2)} yr remaining`;
+    document.getElementById('dashaBar').style.width = (d.frac * 100).toFixed(1) + '%';
+    document.getElementById('dashaBar').style.background = `linear-gradient(90deg, ${d.color}, ${d.color}AA)`;
+    document.getElementById('dashaNext').textContent = `Next: ${d.next}`;
+  }
+
+  const bodies2 = [
+    { key: 'moon',    label: '☽ Moon' },
+    { key: 'mercury', label: '☿ Mercury' },
+    { key: 'venus',   label: '♀ Venus' },
+    { key: 'sun',     label: '☉ Sun' },
+    { key: 'mars',    label: '♂ Mars' },
+    { key: 'jupiter', label: '♃ Jupiter' },
+    { key: 'saturn',  label: '♄ Saturn' },
+  ];
+  const tbl = document.getElementById('planetTable');
+  tbl.innerHTML = bodies2.map(b => {
+    const a = getAngle(b.key, days);
+    const retro = isRetrograde(b.key, days);
+    const rxBadge = retro
+      ? `<span style="color:#C94C6A;font-family:'Cinzel',serif;font-size:10px;margin-left:4px;letter-spacing:0.05em" title="Retrograde — Ketu moment">℞</span>`
+      : '';
+    return `<div class="planet-row">
+      <span class="planet-dot" style="background:${COL[b.key]}"></span>
+      <span class="planet-name">${b.label}${rxBadge}</span>
+      <span class="planet-deg">${fmtDeg(a)}</span>
+      <span class="planet-sign">${signOf(a).split(' ')[1]}</span>
+    </div>`;
+  }).join('');
+
+  // Nodal
+  const ra = getAngle('rahu', days);
+  const ka = (ra + 180) % 360;
+  document.getElementById('nodalDisp').innerHTML =
+    `<span style="color:var(--rahu)">☊ Rahu</span> ${fmtDeg(ra)} <em style="color:var(--dim)">${signOf(ra).split(' ')[1]}</em><br>` +
+    `<span style="color:var(--ketu)">☋ Ketu</span> ${fmtDeg(ka)} <em style="color:var(--dim)">${signOf(ka).split(' ')[1]}</em>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════════════════════════════════════════
+
+function loop(ts) {
+  if (lastTime !== null && playing) {
+    const dt = (ts - lastTime) / 1000;
+    simDays += dt * SPEEDS[speedIdx];
+  }
+  lastTime = ts;
+
+  // ── Update trails: sample every TRAIL_STEP sim-days
+  if (lastTrailDay === null) lastTrailDay = simDays;
+  const dayDiff = simDays - lastTrailDay;
+  if (Math.abs(dayDiff) >= TRAIL_STEP || lastTrailDay === simDays) {
+    const steps = Math.max(1, Math.floor(Math.abs(dayDiff) / TRAIL_STEP));
+    for (let s = 0; s < Math.min(steps, 30); s++) {
+      const d = lastTrailDay + (dayDiff / steps) * s;
+      Object.keys(trails).forEach(b => {
+        const angle = getAngle(b, d);
+        const retro = isRetrograde(b, d);
+        trails[b].push({ angle, retro });
+        if (trails[b].length > TRAIL_LEN) trails[b].shift();
+      });
+    }
+    lastTrailDay = simDays;
+  }
+
+  drawWatch(simDays);
+  updateUI(simDays);
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function updateSpeedLabel() {
+  document.getElementById('speedVal').textContent = SPEED_LABELS[speedIdx];
+}
+
+document.getElementById('speedRange').addEventListener('input', e => {
+  speedIdx = parseInt(e.target.value);
+  updateSpeedLabel();
+});
+
+document.getElementById('btnPause').addEventListener('click', () => {
+  playing = false;
+  document.getElementById('btnPause').classList.add('active');
+  document.getElementById('btnPlay').classList.remove('active');
+});
+
+document.getElementById('btnPlay').addEventListener('click', () => {
+  playing = true;
+  document.getElementById('btnPlay').classList.add('active');
+  document.getElementById('btnPause').classList.remove('active');
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  simDays = EPOCH_DAYS;
+  playing = false;
+  document.getElementById('btnPause').classList.add('active');
+  document.getElementById('btnPlay').classList.remove('active');
+});
+
+// ── Init
+speedIdx = 4;
+document.getElementById('speedRange').value = speedIdx;
+updateSpeedLabel();
+drawWatch(simDays);
+updateUI(simDays);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
