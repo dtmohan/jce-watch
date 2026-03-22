@@ -1380,7 +1380,9 @@ function drawGearBack(days) {
   ctx.font='9px Cinzel,serif'; ctx.fillStyle='rgba(201,168,76,0.28)';
   ctx.fillText(jdToDate(J2000_JD+days),CX,CY+36);
 
-  // MST edge lines (behind gears)
+  // MST edge lines + torque flow arrows
+  // Arrow convention: single arrowhead at driven gear (f→t), direction = torque flow.
+  // Rotation direction labels show CW/CCW at each gear face — even depth = CW, odd = CCW.
   GB_EDGES.forEach(e => {
     const g1=GB_MAP[e.f], g2=GB_MAP[e.t];
     const dx=g2.x-g1.x, dy=g2.y-g1.y, dist=Math.sqrt(dx*dx+dy*dy);
@@ -1389,29 +1391,98 @@ function drawGearBack(days) {
     const th2=Math.max(2.5,g2.r*(g2.r<20?0.25:0.18));
     const x1=g1.x+(g1.r+th1+2)*ux, y1=g1.y+(g1.r+th1+2)*uy;
     const x2=g2.x-(g2.r+th2+2)*ux, y2=g2.y-(g2.r+th2+2)*uy;
+
+    // Dashed shaft line
     ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
-    ctx.strokeStyle='rgba(201,168,76,0.09)'; ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(201,168,76,0.12)'; ctx.lineWidth=1;
     ctx.setLineDash([4,7]); ctx.stroke(); ctx.setLineDash([]);
-    // Ratio labels — perpendicular offset
-    const mx=(x1+x2)/2, my=(y1+y2)/2, px=-uy, py=ux, off=8;
-    ctx.font='7px Cinzel,serif'; ctx.fillStyle='rgba(201,168,76,0.42)';
+
+    // Torque flow arrow — placed 65% along the edge toward driven gear
+    // Arrowhead points from driver to driven (torque direction)
+    const t=0.65;
+    const ax=x1+(x2-x1)*t, ay=y1+(y2-y1)*t;
+    const aLen=7, aWid=3.5;
+    const nx=-uy, ny=ux; // perpendicular
+    ctx.beginPath();
+    ctx.moveTo(ax+ux*aLen, ay+uy*aLen);              // tip
+    ctx.lineTo(ax-ux*aLen*0.3+nx*aWid, ay-uy*aLen*0.3+ny*aWid); // left base
+    ctx.lineTo(ax-ux*aLen*0.3-nx*aWid, ay-uy*aLen*0.3-ny*aWid); // right base
+    ctx.closePath();
+    ctx.fillStyle='rgba(201,168,76,0.55)'; ctx.fill();
+
+    // Driven gear label "⊳ driven" near arrowhead tip
+    ctx.font='6px Cinzel,serif'; ctx.fillStyle='rgba(201,168,76,0.35)';
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(e.lb, mx+px*off, my+py*off-4);
-    ctx.font='6.5px EB Garamond,serif'; ctx.fillStyle='rgba(120,110,65,0.45)';
-    ctx.fillText(e.pp, mx+px*off, my+py*off+4);
+    const labelOff=10;
+    ctx.fillText('▶', ax+ux*(aLen+labelOff), ay+uy*(aLen+labelOff));
+    ctx.textBaseline='alphabetic';
+
+    // Ratio + ppm labels perpendicular offset from midpoint
+    const mx=(x1+x2)/2, my=(y1+y2)/2, off=8;
+    ctx.font='7px Cinzel,serif'; ctx.fillStyle='rgba(201,168,76,0.45)';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(e.lb, mx+nx*off, my+ny*off-4);
+    ctx.font='6.5px EB Garamond,serif'; ctx.fillStyle='rgba(120,110,65,0.48)';
+    ctx.fillText(e.pp, mx+nx*off, my+ny*off+4);
     ctx.textBaseline='alphabetic';
   });
 
-  // Mesh glow at contact points
+  // Mesh contact glows + rotation direction indicators at each gear
   GB_EDGES.forEach(e => {
     const g1=GB_MAP[e.f], g2=GB_MAP[e.t];
     const dx=g2.x-g1.x, dy=g2.y-g1.y, dist=Math.sqrt(dx*dx+dy*dy);
     const ux=dx/dist, uy=dy/dist;
     const th1=Math.max(2.5,g1.r*(g1.r<20?0.25:0.18));
-    const mx=g1.x+(g1.r+th1)*ux, my=g1.y+(g1.r+th1)*uy;
-    const gl=ctx.createRadialGradient(mx,my,0,mx,my,9);
-    gl.addColorStop(0,'rgba(255,240,160,0.22)'); gl.addColorStop(1,'rgba(255,240,160,0)');
-    ctx.beginPath(); ctx.arc(mx,my,9,0,TWO_PI); ctx.fillStyle=gl; ctx.fill();
+    const cx2=g1.x+(g1.r+th1)*ux, cy2=g1.y+(g1.r+th1)*uy;
+    const gl=ctx.createRadialGradient(cx2,cy2,0,cx2,cy2,9);
+    gl.addColorStop(0,'rgba(255,240,160,0.25)'); gl.addColorStop(1,'rgba(255,240,160,0)');
+    ctx.beginPath(); ctx.arc(cx2,cy2,9,0,TWO_PI); ctx.fillStyle=gl; ctx.fill();
+  });
+
+  // Rotation direction arc indicators — small curved arrows on each gear rim
+  // showing which way it actually turns (CW = even depth, CCW = odd depth)
+  GB.forEach(g => {
+    const isCW = (g.d % 2 === 0);
+    // Draw a 120° arc near the top of the gear with a small arrowhead
+    const arcR   = g.r + Math.max(2.5, g.r*(g.r<20?0.25:0.18)) + 5;
+    const arcAng = Math.PI * 2 / 3; // 120°
+    const startA = -Math.PI * 0.75; // start at ~upper-left
+    const endA   = startA + (isCW ? arcAng : -arcAng);
+    const col    = g.c;
+    ctx.beginPath();
+    if (isCW) ctx.arc(g.x, g.y, arcR, startA, endA, false);
+    else       ctx.arc(g.x, g.y, arcR, startA, endA, true);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.5; ctx.stroke();
+    ctx.globalAlpha = 1.0;
+
+    // Arrowhead at end of arc
+    const tipA  = endA;
+    const tx    = g.x + arcR * Math.cos(tipA);
+    const ty    = g.y + arcR * Math.sin(tipA);
+    // Tangent direction at arc tip
+    const tanA  = isCW ? tipA + Math.PI/2 : tipA - Math.PI/2;
+    const hLen  = 4, hWid = 2;
+    const hx    = Math.cos(tanA), hy = Math.sin(tanA);
+    const nx2   = -hy, ny2 = hx;
+    ctx.beginPath();
+    ctx.moveTo(tx + hx*hLen,         ty + hy*hLen);
+    ctx.lineTo(tx - hx*hLen*0.3 + nx2*hWid, ty - hy*hLen*0.3 + ny2*hWid);
+    ctx.lineTo(tx - hx*hLen*0.3 - nx2*hWid, ty - hy*hLen*0.3 - ny2*hWid);
+    ctx.closePath();
+    ctx.fillStyle = col; ctx.globalAlpha = 0.55; ctx.fill(); ctx.globalAlpha = 1.0;
+
+    // CW / CCW text label below each arc
+    if (g.k !== 'sun') { // sun has the corona overlay, skip
+      const lblA  = startA + (isCW ? arcAng : -arcAng) / 2;
+      const lblR  = arcR + 7;
+      ctx.font    = '5.5px Cinzel,serif';
+      ctx.fillStyle = col; ctx.globalAlpha = 0.38;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(isCW ? 'CW' : 'CCW',
+        g.x + lblR * Math.cos(lblA),
+        g.y + lblR * Math.sin(lblA));
+      ctx.globalAlpha = 1.0; ctx.textBaseline = 'alphabetic';
+    }
   });
 
   // Draw all gears (even depth=CW, odd=CCW)
@@ -1434,10 +1505,12 @@ function drawGearBack(days) {
   drawRahuKetuInset(days, 185, 355);
   drawGenevaInset(days,  375, 355);
 
-  // Footer
+  // Footer + torque legend
   ctx.font='7.5px Cinzel,serif'; ctx.fillStyle='rgba(201,168,76,0.28)';
   ctx.textAlign='center';
   ctx.fillText('JCE Architecture Series · Notes 1–11 · From Position to Phase', CX, H-17);
+  ctx.font='6.5px Cinzel,serif'; ctx.fillStyle='rgba(201,168,76,0.22)';
+  ctx.fillText('▶ = torque flow direction  ·  curved arc = rotation sense  ·  CW/CCW = spin direction', CX, H-7);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
