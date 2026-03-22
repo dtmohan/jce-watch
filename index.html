@@ -439,20 +439,33 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── DEPENDENCY MAP ──────────────────────────────────────────────────────────
-// JCE-native:  ALL bodies.
-//   Sun, Mercury, Venus, Mars, Jupiter, Saturn — helioXY engine (Notes 8,9)
-//   Moon longitude — Note 25, 3-term CP-truncated stand-alone engine
-//   Rahu true node — Note 25 extension, conductance integral derivation
-//   Galactic markers, Abhijit, Vimshottari — Notes 1,5,11,13,17,18
-//   Saturn GI + solo nodal correction — Notes 9,24
-//   Structural ayanamsha — Note 13
-// Meeus:       NONE. Engine is fully stand-alone. No external dependencies.
-// Audit ref:   pyswisseph/Moshier — validation oracle only, not operational.
+// JCE-native (derived from framework first principles):
+//   GI J→S (-0.812°, Note 9), GI S→J (+0.332°, Note 9)
+//   Saturn solo nodal (±0.714° candidate, Note 24)
+//   Moon longitude (Note 25: 3-term, CP-truncated)
+//   Rahu true node (Note 25: conductance derivation)
+//   Structural ayanamsha (Note 13)
+//   Galactic markers, Abhijit, Vimshottari (Notes 1,5,11,13,17,18)
 //
-// Remaining open threads (Note 25):
-//   - Derive Rahu amplitude 1.4368° second-order correction (currently 4.2% off)
-//   - Derive Moon variation (A₃) from Moon-Sun-Earth triad conductance
-//   - Derive Moon eccentricity (A₁ amplitude) from apsidal helix geometry
+// Empirical BCs (accepted same status as obliquity — observed, not derived):
+//   Epoch elements L0, e, w at J2000 for all planets
+//   dw/dt apsidal rates (6 planets) — from Lagrange-Laplace secular theory.
+//     NOT from Note 8 (Note 8 = nodal, not apsidal). Correctly labeled here.
+//     Inside σ floor over ±30yr. Open thread: derive from conductance model.
+//   J→Earth (+0.183°), J→Mars (+0.073°), S→Mars (+0.012°) coupling amplitudes
+//     From Laplace coefficient calibration. All inside σ floor individually.
+//     Open thread: derive from MST dyad conductance (same class as GI/Rahu).
+//   Mars de/dt = -0.00013/cy — explicitly empirical BC
+//   Mass ratios M_J/M_S, M_E/M_S — empirical BCs
+//
+// Audit reference: pyswisseph/Moshier — validation oracle only.
+//
+// Open threads (in priority order):
+//   1. Derive apsidal precession dw/dt from conductance integral (6 planets)
+//   2. Derive J→Earth, J→Mars, S→Mars amplitudes from MST dyad conductance
+//   3. Derive Saturn solo nodal amplitude formally (Note 24 §8 open)
+//   4. Derive Moon variation A3 from triad conductance (Hill factor 2.74×)
+//   5. Derive Rahu second-order correction (4.2% from first-order)
 // ────────────────────────────────────────────────────────────────────────────
 
 const TWO_PI = Math.PI * 2;
@@ -664,6 +677,19 @@ function displayAngle(body, days) {
   return siderealMode ? getSiderealAngle(body, days) : getAngle(body, days);
 }
 
+// ── Orbital elements at J2000.0 ──────────────────────────────────────────
+// e  : eccentricity at J2000 — empirical BC
+// w  : longitude of perihelion at J2000 (degrees) — empirical BC
+// dw : secular apsidal precession rate (degrees per Julian century)
+//      SOURCE: classical Lagrange-Laplace secular perturbation theory.
+//      NOT derived from Note 8 (Note 8 gives NODAL precession periods,
+//      which are a different quantity). These are empirical BCs with the
+//      same status as de/dt for Mars — accepted from observation.
+//      IMPACT: inside σ floor (0.6475°) over ±30yr validation window.
+//      Exceeds floor beyond ~35yr (Mercury), ~50yr (others).
+//      Open thread: derive from JCE conductance model (same structure
+//      as GI and Rahu derivations — Laplace coefficient integral).
+// de : secular eccentricity drift per Julian century — empirical BC (Mars only)
 const ORBITAL = {
   mercury: { e: 0.20563,  w: 77.4561,   dw: 1.91953              },
   venus:   { e: 0.00677,  w: 131.5637,  dw: 1.39390              },
@@ -737,10 +763,18 @@ function helioXY(key, days) {
     }
 
   } else if (key === 'earth') {
+    // Jupiter→Earth coupling — empirical BC amplitude 0.183°
+    // Source: Laplace coefficient calibration (classical perturbation theory).
+    // NOT derived from JCE conductance model yet. Inside σ floor (0.183° < 0.6475°).
+    // Open thread: derive via conductance integral same as GI and Rahu (Note 25).
     const phi_EJ = (L_J - L_E) * DEG;
     giCorr = 0.183 * Math.sin(phi_EJ);
 
   } else if (key === 'mars') {
+    // Jupiter→Mars (0.073°) and Saturn→Mars (0.012°) — empirical BC amplitudes
+    // Source: Laplace coefficient calibration. NOT JCE-native.
+    // Both inside σ floor individually and combined (0.085° < 0.6475°).
+    // Open thread: derive from MST dyad conductance (same class as GI).
     const phi_MJ = (L_J - L_M_mean) * DEG;
     const phi_MS = (L_S - L_M_mean) * DEG;
     giCorr = 0.073 * Math.sin(phi_MJ)
