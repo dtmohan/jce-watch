@@ -1279,7 +1279,7 @@ canvas.addEventListener('click', e => {
   let hit = null;
   let bestDist = 18; // px hit radius
   planetList.forEach(b => {
-    const angle = getAngle(b, simDays);
+    const angle = displayAngle(b, simDays);
     const p = toCanvas(angle, ORBITS[b]);
     const d = Math.hypot(mx - p.x, my - p.y);
     if (d < bestDist) { bestDist = d; hit = b; }
