@@ -384,10 +384,17 @@
       <div id="planetTable"></div>
     </div>
 
-    <!-- Rahu/Ketu -->
+    <!-- Rahu/Ketu + Galactic Axis Alignment -->
     <div class="card">
       <div class="card-title">Nodal Axis (Rahu / Ketu)</div>
       <div id="nodalDisp" style="font-size:13px; line-height:1.9;"></div>
+      <div id="axisAlignDisp" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- Galactic Phase + Primary Prediction (Note 17) -->
+    <div class="card">
+      <div class="card-title">Galactic Phase · Note 17</div>
+      <div id="galacticPhaseDisp"></div>
     </div>
 
     <!-- Legend -->
@@ -666,6 +673,46 @@ const GALACTIC_CROSSINGS = [
 ];
 // Layer B: Sgr A* actual galactic center (Note 18) — 3.2° inside the ecliptic node
 const SGR_A_LON = 243.0;  // sidereal degrees
+
+// ── Note 17: Galactic phase + nodal axis alignment
+// GC-GAC axis as a line (symmetric): Sgr A* 243° ↔ GAC 63°
+// Represented as the 0–180° "direction" of the axis
+const GC_AXIS_DIR = 63.0;  // 243 - 180 = 63° (or equivalently 243°)
+
+// Four-phase galactic cycle (Note 17 §1)
+// Phase 2 peak: ~1951 CE = J2000 - 48.5yr = J2000 - 17716 days
+const PHASE2_PEAK_DAYS = -17716;  // days since J2000
+const T3_DAYS = 25920 * 365.25;   // full precession in days
+// WS sidereal position at J2000 (tropical WS = 270° tropical → sidereal ≈ 246.02°)
+const WS_SID_J2000 = 246.02;      // approx sidereal winter solstice at J2000
+
+// Primary prediction window (Note 17 §3.3): Oct 2029 – Jun 2030
+// Oct 1 2029 ≈ J2000 + 10866 days; Jun 1 2030 ≈ J2000 + 11109 days
+const PRED_WINDOW_START = 10866;  // days since J2000
+const PRED_WINDOW_PEAK  = 10940;  // ~2029.95 — Rahu deepest in Mula
+const PRED_WINDOW_END   = 11109;
+
+// ── Nodal axis alignment to GC-GAC axis (Note 17)
+// Returns angle in degrees (0° = perfect alignment, 90° = maximum misalignment)
+function nodalAxisAlignment(rahuLon) {
+  const rahuAxis = rahuLon % 180;  // collapse to 0–180° line direction
+  let diff = Math.abs(rahuAxis - GC_AXIS_DIR);
+  if (diff > 90) diff = 180 - diff;
+  return diff;  // 0° = aligned, 90° = perpendicular
+}
+
+// ── WS sidereal longitude at a given day (approximate: precesses ~50.3"/yr)
+function wsSidereal(days) {
+  return ((WS_SID_J2000 - days * (50.3 / 3600) / 365.25) % 360 + 360) % 360;
+}
+
+// ── WS deviation from Sgr A* (243.0°) — Note 17 §2 current position
+function wsDeviationFromGC(days) {
+  const ws = wsSidereal(days);
+  let d = Math.abs(ws - SGR_A_LON);
+  if (d > 180) d = 360 - d;
+  return d;
+}
 
 // Exaltation degrees (Note 5/6) — sidereal
 const EXALT_DEGREES = [
@@ -1337,7 +1384,68 @@ function drawWatch(days) {
     }
   });
 
-  // ── Exaltation degree marks (Note 5/6) — tiny colored diamonds on belt inner edge
+  // ── Note 17: GC-GAC structural axis + Rahu-Ketu live axis
+  {
+    const rahuSid  = getSiderealAngle('rahu', days);
+    const ketuSid  = (rahuSid + 180) % 360;
+    const alignDeg = nodalAxisAlignment(rahuSid);  // 0° = aligned, 90° = perp
+    const alignFrac = 1 - alignDeg / 90;           // 1.0 = perfect, 0.0 = perp
+    const isAligned = alignDeg < 12;               // within 12° = activated
+
+    // GC-GAC background axis — fixed structural line (Sgr A* 243° ↔ GAC 63°)
+    const gcRad1 = (SGR_A_LON + beltOffset - 90) * DEG;
+    const gcRad2 = (63.0      + beltOffset - 90) * DEG;
+    const axisR  = ZODIAC_INNER - 12;
+    ctx.beginPath();
+    ctx.moveTo(CX + axisR * Math.cos(gcRad1), CY + axisR * Math.sin(gcRad1));
+    ctx.lineTo(CX + axisR * Math.cos(gcRad2), CY + axisR * Math.sin(gcRad2));
+    ctx.strokeStyle = '#C94C6A';
+    ctx.lineWidth = 0.6;
+    ctx.setLineDash([3, 6]);
+    ctx.globalAlpha = 0.18;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1.0;
+
+    // Rahu-Ketu live axis — through center of face
+    const rRad = (rahuSid + beltOffset - 90) * DEG;
+    const kRad = (ketuSid  + beltOffset - 90) * DEG;
+    const rkR  = ORBITS['saturn'] + 16;  // just inside saturn orbit ring
+
+    // Glow when aligned
+    if (isAligned) {
+      ctx.beginPath();
+      ctx.moveTo(CX + rkR * Math.cos(rRad), CY + rkR * Math.sin(rRad));
+      ctx.lineTo(CX + rkR * Math.cos(kRad), CY + rkR * Math.sin(kRad));
+      ctx.strokeStyle = `rgba(76,168,201,${(alignFrac * 0.35).toFixed(2)})`;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+    }
+
+    // Core axis line
+    ctx.beginPath();
+    ctx.moveTo(CX + rkR * Math.cos(rRad), CY + rkR * Math.sin(rRad));
+    ctx.lineTo(CX + rkR * Math.cos(kRad), CY + rkR * Math.sin(kRad));
+    ctx.strokeStyle = isAligned
+      ? `rgba(76,168,201,${(0.4 + alignFrac * 0.5).toFixed(2)})`
+      : 'rgba(76,168,201,0.18)';
+    ctx.lineWidth = isAligned ? 1.2 : 0.7;
+    ctx.setLineDash(isAligned ? [] : [4, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Rahu endpoint dot
+    ctx.beginPath();
+    ctx.arc(CX + rkR * Math.cos(rRad), CY + rkR * Math.sin(rRad), isAligned ? 3 : 2, 0, TWO_PI);
+    ctx.fillStyle = isAligned ? '#4CA8C9' : 'rgba(76,168,201,0.3)';
+    ctx.fill();
+
+    // Ketu endpoint dot
+    ctx.beginPath();
+    ctx.arc(CX + rkR * Math.cos(kRad), CY + rkR * Math.sin(kRad), isAligned ? 3 : 2, 0, TWO_PI);
+    ctx.fillStyle = isAligned ? '#C94C6A' : 'rgba(201,76,106,0.3)';
+    ctx.fill();
+  }
   EXALT_DEGREES.forEach(ex => {
     const exRad = (ex.lon + beltOffset - 90) * DEG;
     const exR = ZODIAC_INNER - 1;
@@ -1917,9 +2025,83 @@ function updateUI(days) {
   // Nodal
   const ra = displayAngle('rahu', days);
   const ka = (ra + 180) % 360;
+
+  // Nakshatra for each node (always sidereal)
+  const raSid = getSiderealAngle('rahu', days);
+  const kaSid = (raSid + 180) % 360;
+  const raNak = getNakshatra(raSid);
+  const kaNak = getNakshatra(kaSid);
+  const raAnchor = ANCHOR_NAKSHATRAS[raNak.name.replace(' ✦','')];
+  const kaAnchor = ANCHOR_NAKSHATRAS[kaNak.name.replace(' ✦','')];
+
   document.getElementById('nodalDisp').innerHTML =
-    `<span style="color:var(--rahu)">☊ Rahu</span> ${fmtDeg(ra)} <em style="color:var(--dim)">${signOf(ra).split(' ')[1]}</em><br>` +
-    `<span style="color:var(--ketu)">☋ Ketu</span> ${fmtDeg(ka)} <em style="color:var(--dim)">${signOf(ka).split(' ')[1]}</em>`;
+    `<span style="color:var(--rahu)">☊ Rahu</span> ${fmtDeg(ra)} ` +
+    `<em style="color:var(--dim)">${signOf(ra).split(' ')[1]}</em> ` +
+    `<span style="color:${DASHA_COLORS[raNak.lord]};font-size:11px;">${raNak.name}${raAnchor ? ' <span style="color:'+raAnchor.color+'">⬡</span>' : ''}</span><br>` +
+    `<span style="color:var(--ketu)">☋ Ketu</span> ${fmtDeg(ka)} ` +
+    `<em style="color:var(--dim)">${signOf(ka).split(' ')[1]}</em> ` +
+    `<span style="color:${DASHA_COLORS[kaNak.lord]};font-size:11px;">${kaNak.name}${kaAnchor ? ' <span style="color:'+kaAnchor.color+'">⬡</span>' : ''}</span>`;
+
+  // Axis alignment to GC-GAC
+  const alignDeg = nodalAxisAlignment(raSid);
+  const alignFrac = 1 - alignDeg / 90;
+  const alignColor = alignDeg < 12 ? '#4CA8C9' : alignDeg < 30 ? '#C9A84C' : '#5A4820';
+  const alignBarW = ((1 - alignDeg / 90) * 100).toFixed(1);
+  document.getElementById('axisAlignDisp').innerHTML =
+    `<div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:0.2em;color:var(--dim);text-transform:uppercase;margin-bottom:5px;">Axis → GC-GAC</div>` +
+    `<div style="display:flex;align-items:center;gap:8px;">` +
+    `  <div style="flex:1;height:3px;background:#1a1608;border-radius:2px;">` +
+    `    <div style="height:100%;border-radius:2px;background:${alignColor};width:${alignBarW}%;transition:width 0.4s"></div>` +
+    `  </div>` +
+    `  <span style="font-family:'Cinzel',serif;font-size:11px;color:${alignColor};min-width:36px;text-align:right;">${alignDeg.toFixed(1)}°</span>` +
+    `</div>` +
+    `<div style="font-size:10px;color:var(--dim);margin-top:3px;font-style:italic;">` +
+    `${alignDeg < 5 ? '★ Near-alignment — axis approaching GC-GAC' : alignDeg < 12 ? '↑ Approaching galactic axis' : '0° = Rahu-Ketu axis aligns with GC-GAC'}` +
+    `</div>`;
+
+  // Galactic Phase card (Note 17)
+  const wsDev = wsDeviationFromGC(days);
+  const inWindow2deg = wsDev < 2.0;
+  const inWindow1deg = wsDev < 1.0;
+  // Days to prediction window
+  const daysToWindow = PRED_WINDOW_START - days;
+  const daysToPeak   = PRED_WINDOW_PEAK  - days;
+  const daysToEnd    = PRED_WINDOW_END   - days;
+  const inPredWindow = days >= PRED_WINDOW_START && days <= PRED_WINDOW_END;
+  const pastWindow   = days > PRED_WINDOW_END;
+
+  let countdownStr;
+  if (inPredWindow) {
+    countdownStr = `<span style="color:#C94C6A;font-family:'Cinzel',serif;font-size:12px;">★ ACTIVE — Rahu in Mula window</span>`;
+  } else if (pastWindow) {
+    countdownStr = `<span style="color:var(--dim);font-size:11px;">Window passed</span>`;
+  } else {
+    const yrs = (daysToWindow / 365.25).toFixed(1);
+    const peakYrs = (daysToPeak / 365.25).toFixed(1);
+    countdownStr =
+      `<span style="font-family:'Cinzel',serif;font-size:12px;color:#C94C6A;">${yrs} yr</span>` +
+      `<span style="font-size:10px;color:var(--dim);"> to window open</span><br>` +
+      `<span style="font-size:10px;color:var(--dim);">Peak (Rahu deepest in Mula): ${peakYrs} yr</span>`;
+  }
+
+  document.getElementById('galacticPhaseDisp').innerHTML =
+    `<div style="margin-bottom:8px;">` +
+    `  <div style="font-size:10px;color:var(--dim);margin-bottom:3px;">WS deviation from Sgr A* (243°)</div>` +
+    `  <div style="display:flex;align-items:center;gap:8px;">` +
+    `    <div style="flex:1;height:3px;background:#1a1608;border-radius:2px;">` +
+    `      <div style="height:100%;border-radius:2px;background:${inWindow1deg ? '#C94C6A' : inWindow2deg ? '#C9A84C' : '#5A4820'};width:${Math.max(0,(1-wsDev/5)*100).toFixed(0)}%"></div>` +
+    `    </div>` +
+    `    <span style="font-family:'Cinzel',serif;font-size:11px;color:${inWindow2deg ? '#C94C6A' : 'var(--dim)'};min-width:38px;text-align:right;">${wsDev.toFixed(2)}°</span>` +
+    `  </div>` +
+    `  <div style="font-size:10px;color:var(--dim);margin-top:2px;font-style:italic;">` +
+    `    ${inWindow1deg ? '★ Inside 1° window' : inWindow2deg ? '◎ Inside 2° window (open to ~2095)' : 'Outside 2° window'}` +
+    `  </div>` +
+    `</div>` +
+    `<div style="border-top:1px solid var(--dim);padding-top:8px;margin-top:4px;">` +
+    `  <div style="font-size:9px;color:var(--dim);font-family:'Cinzel',serif;letter-spacing:0.2em;text-transform:uppercase;margin-bottom:5px;">Primary Prediction — Oct 2029</div>` +
+    `  <div style="font-size:10px;color:var(--dim);margin-bottom:5px;font-style:italic;line-height:1.5;">Rahu in Mula · Ketu in Ardra-Mrigashira<br>Nodal axis ≈ GC-GAC · 18.6yr + 25,920yr in phase</div>` +
+    `  ${countdownStr}` +
+    `</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
