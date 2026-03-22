@@ -440,7 +440,6 @@ const DEG = Math.PI / 180;
 const OBLIQUITY = 23.4392911 * DEG;
 
 // Heliocentric orbital elements at J2000.0
-// T=sidereal period (days), L0=mean longitude (deg), a=semi-major axis (AU)
 const HELIO = {
   mercury: { T: 87.969257,  L0: 252.251, a: 0.38710 },
   venus:   { T: 224.700799, L0: 181.980, a: 0.72333 },
@@ -450,11 +449,9 @@ const HELIO = {
   saturn:  { T: 10759.22,   L0: 50.077,  a: 9.55491 },
 };
 
-// Geocentric-only bodies (no heliocentric conversion needed)
 const GEO_PERIODS = { moon: 27.321661, rahu: -6792.97 };
 const GEO_L0      = { moon: 218.316,   rahu: 125.045  };
 
-// Colors
 const COL = {
   moon:    '#B8C8E8',
   mercury: '#9ABCB0',
@@ -467,7 +464,6 @@ const COL = {
   ketu:    '#C94C6A',
 };
 
-// Orbit radii (canvas units, inner to outer)
 const ORBITS = {
   moon:    62,
   mercury: 92,
@@ -478,18 +474,15 @@ const ORBITS = {
   saturn:  238,
 };
 
-// Planet sizes
 const SIZES = {
   moon: 4.5, mercury: 3.5, venus: 4.5, sun: 5.5,
   mars: 4, jupiter: 5, saturn: 5,
 };
 
-// ── Zodiac signs
 const SIGNS = ['♈ Aries','♉ Taurus','♊ Gemini','♋ Cancer',
                '♌ Leo','♍ Virgo','♎ Libra','♏ Scorpio',
                '♐ Sagittarius','♑ Capricorn','♒ Aquarius','♓ Pisces'];
 
-// ── Vimshottari dasha sequence
 const DASHA = [
   { lord: 'Ketu',    years: 7,  color: '#C94C6A' },
   { lord: 'Venus',   years: 20, color: '#D4A574' },
@@ -501,19 +494,15 @@ const DASHA = [
   { lord: 'Saturn',  years: 19, color: '#A8B090' },
   { lord: 'Mercury', years: 17, color: '#9ABCB0' },
 ];
-const DASHA_TOTAL = 120; // years
+const DASHA_TOTAL = 120;
 
-// J2000.0 = JD 2451545.0 = Jan 1.5 2000
-const J2000_JD = 2451545.0;
-// March 21, 2026 ≈ JD 2461121
-const EPOCH_JD = 2461121.0;  // today
-const EPOCH_DAYS = EPOCH_JD - J2000_JD;  // days since J2000
+const J2000_JD   = 2451545.0;
+const EPOCH_JD   = 2461121.0;
+const EPOCH_DAYS = EPOCH_JD - J2000_JD;
 
-// Speed steps: days per real second
 const SPEEDS = [0, 1/24, 1/4, 1, 7, 30, 365, 365*5, 365*20, 365*120];
 const SPEED_LABELS = ['Paused','1 hr/s','6 hr/s','1 day/s','1 wk/s','1 mo/s','1 yr/s','5 yr/s','20 yr/s','120 yr/s'];
 
-// Planet labels and symbols
 const LABELS = {
   moon:    { sym: '☽', name: 'Moon' },
   mercury: { sym: '☿', name: 'Mercury' },
@@ -529,19 +518,17 @@ const LABELS = {
 // ═══════════════════════════════════════════════════════════════════════════
 let simDays = EPOCH_DAYS;
 let playing = false;
-let speedIdx = 3;  // default: 1 day/s (index 3 in new array)
+let speedIdx = 3;
 let lastTime = null;
 let selectedPlanet = null;
 let helioMode = false;
-let lastUITime = 0;  // wall-clock ms — throttle panel DOM writes to ~12fps
-let rosetteMode = false;  // Mercury rosette accumulation mode (paper §11.3)
-const mercuryRosette = [];  // persistent, never shifted — accumulates all petals
+let lastUITime = 0;
+let rosetteMode = false;
+const mercuryRosette = [];
 
-// Nakshatra panel throttle — only re-render when nakshatra changes or fraction moves >0.5%
 let _lastNakName = '';
 let _lastNakFrac = -1;
 
-// Heliocentric display orbit radii (AU-proportional, compressed for display)
 const HELIO_ORBITS = {
   mercury: 55, venus: 84, earth: 115, mars: 148, jupiter: 190, saturn: 232,
 };
@@ -555,27 +542,19 @@ const W = canvas.width;
 const H = canvas.height;
 const CX = W / 2;
 const CY = H / 2;
-const R_FACE = W * 0.46;    // outer radius of watch face
+const R_FACE = W * 0.46;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MATH HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Lahiri ayanamsha (degrees) — derived from JCE Note 1 / Corollary 1
-// Zero point: ~285 CE (making Sun exalt at 10° sidereal = 10.9° precession since ~500 BCE encoding)
-// Rate: 50.3 arcseconds/year = IAU standard
 function ayanamsha(days) {
   return 23.85 + days * (50.3 / 3600) / 365.25;
 }
 
-// ── Geocentric tropical longitude
 function getAngle(body, days) {
-  if (body === 'moon') {
-    return getMoonLongitude(days);
-  }
-  if (body === 'rahu') {
-    return getRahuLongitude(days);
-  }
+  if (body === 'moon') return getMoonLongitude(days);
+  if (body === 'rahu') return getRahuLongitude(days);
   const earth = helioXY('earth', days);
   if (body === 'sun') {
     const lon = Math.atan2(-earth.y, -earth.x) / DEG;
@@ -588,33 +567,15 @@ function getAngle(body, days) {
   return (lon % 360 + 360) % 360;
 }
 
-// ── Sidereal longitude (Lahiri) — JCE-correct frame
 function getSiderealAngle(body, days) {
   return ((getAngle(body, days) - ayanamsha(days)) % 360 + 360) % 360;
 }
 
-// ── Display angle: sidereal or tropical depending on mode
-let siderealMode = true;   // default: sidereal (JCE-correct)
+let siderealMode = true;
 function displayAngle(body, days) {
   return siderealMode ? getSiderealAngle(body, days) : getAngle(body, days);
 }
 
-// Heliocentric x,y position (AU) — with equation of centre + secular evolution + GI
-//
-// Orbital elements at J2000.0 (epoch-0 snapshot)
-// e  : eccentricity
-// w  : longitude of perihelion (degrees)
-// dw : secular rate of ω (degrees per Julian century)
-//      Derived from: nodal precession timescales (Note 8) + apsidal precession
-//      from mutual planetary perturbations (same N-body physics as the MST, Note 5)
-//      Mercury largest (high inclination, largest δ from Note 8);
-//      Jupiter smallest (most stable — smallest correction term, Note 8 §5.2)
-// de : secular eccentricity drift per Julian century (significant only for Mars)
-//
-// Note 8 nodal precession periods → Ω̇:  Saturn 36,000yr → −1.00°/cy
-//                                         Mars 171,000yr → −0.21°/cy
-//                                         Jupiter 430,000yr → −0.08°/cy
-// Combined with prograde apsidal precession from MST coupling:
 const ORBITAL = {
   mercury: { e: 0.20563,  w: 77.4561,   dw: 1.91953              },
   venus:   { e: 0.00677,  w: 131.5637,  dw: 1.39390              },
@@ -627,48 +588,20 @@ const ORBITAL = {
 function helioXY(key, days) {
   const o   = HELIO[key];
   const orb = ORBITAL[key];
-  const T   = days / 36525.0;  // Julian centuries since J2000
+  const T   = days / 36525.0;
 
-  // ── 1. Secular element evolution (Note 8: nodal precession drives ω drift)
   const w_eff = orb.w + orb.dw * T;
   const e_eff = orb.e + (orb.de || 0) * T;
 
-  // ── 2. Mean longitude → mean anomaly using epoch-correct perihelion
   const L    = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360;
   const M    = ((L - w_eff) % 360 + 360) % 360;
   const Mrad = M * DEG;
   const e    = e_eff;
 
-  // ── 3. Equation of centre (3 terms, accurate to ~0.01° for most planets)
   const eqc = (2*e - e*e*e/4) * Math.sin(Mrad)
             + (5/4)*e*e        * Math.sin(2*Mrad)
             + (13/12)*e*e*e    * Math.sin(3*Mrad);
 
-  // ── 4. Planetary coupling perturbations — derived from Laplace coefficient
-  //    calibration against the verified GI amplitude (Note 9, 0.06% residual).
-  //
-  //    Formula: amp = C × (m_perturber/m_sun) × b_{3/2}^(1)(alpha) / mst_weight
-  //    Calibration C = 5.485 from GI: 0.812° = C × (m_J/m_sun) × L_JS / w_JS
-  //    where w_JS = |5T_J − 2T_S|/T_S = 0.0134 (5:2 J-S near-resonance)
-  //
-  //    NOTE: The Note 9 GI formula (M_J/M_S) cannot generalise to Mars-Jupiter —
-  //    mass ratio Mars:Jupiter = 2960 vs J-S = 3.34 (900× out of calibration range).
-  //    Laplace coefficient approach is the framework-consistent derivation.
-  //    A proper first-principles note for M-J coupling is the open thread here.
-  //
-  //    Implemented terms (synodic argument = dominant direct coupling per MST):
-  //    ┌──────────────────┬──────┬──────────┬──────────────────────────────────┐
-  //    │ Coupling         │  w   │  amp (°) │  Source                          │
-  //    ├──────────────────┼──────┼──────────┼──────────────────────────────────┤
-  //    │ J→S GI (5:2)    │0.013 │ −0.812   │ Note 9, verified 0.06%           │
-  //    │ S→J (reciprocal)│0.013 │ +0.332   │ Note 9 (M_S/M_J ratio)           │
-  //    │ J→Earth (12:1)  │0.012 │  0.183   │ Laplace, near 12:1 resonance     │
-  //    │ J→Mars (1:6)    │0.049 │  0.073   │ Laplace, MST edge                │
-  //    │ Saturn→Mars     │0.042 │  0.012   │ Laplace (retained but small)     │
-  //    └──────────────────┴──────┴──────────┴──────────────────────────────────┘
-  //    All other couplings < 0.005° — below the Lahiri ayanamsha precision floor.
-
-  // Mean longitudes of coupling partners (needed for resonant arguments)
   const L_J = ((HELIO.jupiter.L0 + 360 * days / HELIO.jupiter.T) % 360 + 360) % 360;
   const L_S = ((HELIO.saturn.L0  + 360 * days / HELIO.saturn.T)  % 360 + 360) % 360;
   const L_E = ((HELIO.earth.L0   + 360 * days / HELIO.earth.T)   % 360 + 360) % 360;
@@ -682,42 +615,55 @@ function helioXY(key, days) {
     giCorr = 0.332 * Math.sin(phi_GI);
 
   } else if (key === 'saturn') {
-    // J-S GI dominant (Note 9, verified 0.812°)
+    // ── Layer 1: J-S GI dominant (Note 9, verified 0.812°)
     const phi_GI = (5 * L_J - 2 * L_S) * DEG;
     giCorr = -0.812 * Math.sin(phi_GI);
 
+    // ── Layer 2: Saturn solo nodal correction (Note 24 §8–9)
+    // Fires within 30° of ascending node (~89° sidereal) or descending node (~269° sidereal).
+    // Both nodes sit at exactly 1× obliquity-arc from their nearest galactic crossings (Note 5).
+    // Candidate formula: Solo_S = delta_S × (M_E/M_S) × (T_zod/alpha) × (180/pi) ≈ 0.714°
+    // Shape: cosine taper — peaks at node, falls to zero at ±30° window edge.
+    // Sign: positive — corrects the observed negative residuals near nodal positions.
+    // Empirical target: reduces Saturn max residual from 1.08° to ~0.37° (inside σ floor 0.6475°).
+    {
+      const satSid = ((L_S - ayanamsha(days)) % 360 + 360) % 360;
+      const angSep = (node, sid) => {
+        let d = Math.abs(sid - node);
+        if (d > 180) d = 360 - d;
+        return d;
+      };
+      const NODE_WIN = 30;    // degree window (Note 24 §9 Step 1)
+      const SOLO_AMP = 0.714; // degrees (Note 24 §8 candidate formula)
+      const d89  = angSep(89,  satSid);
+      const d269 = angSep(269, satSid);
+      if (d89  < NODE_WIN) giCorr += SOLO_AMP * Math.cos(d89  * Math.PI / (2 * NODE_WIN));
+      if (d269 < NODE_WIN) giCorr += SOLO_AMP * Math.cos(d269 * Math.PI / (2 * NODE_WIN));
+    }
+
   } else if (key === 'earth') {
-    // Earth from Jupiter — near 12:1 resonance (w=0.012, amp=0.183°, period 85.8yr secular)
-    // Synodic argument dominates; Jupiter pulls Earth forward at conjunction (φ=0)
     const phi_EJ = (L_J - L_E) * DEG;
     giCorr = 0.183 * Math.sin(phi_EJ);
 
   } else if (key === 'mars') {
-    // Mars from Jupiter — MST edge (w=0.049, amp=0.073°, synodic period 2.235yr)
     const phi_MJ = (L_J - L_M_mean) * DEG;
-    // Mars from Saturn — non-MST (amp=0.012°)
     const phi_MS = (L_S - L_M_mean) * DEG;
     giCorr = 0.073 * Math.sin(phi_MJ)
            + 0.012 * Math.sin(phi_MS);
   }
 
-  // ── 5. True heliocentric longitude and radius
   const trueLon = (L + eqc / DEG + giCorr) * DEG;
   const r       = o.a * (1 - e*e) / (1 + e * Math.cos(Mrad + eqc));
   return { x: r * Math.cos(trueLon), y: r * Math.sin(trueLon) };
 }
 
-// ── Moon position with main analytical corrections (Meeus Ch.47 simplified)
-// Reduces error from ~8° max to ~0.5° max
 function getMoonLongitude(days) {
-  const T = days / 36525.0;  // Julian centuries since J2000
-  // Moon's mean elements (degrees)
-  const Lp = ((218.3164477 + 481267.88123421*T) % 360 + 360) % 360;  // mean longitude
-  const D  = ((297.8501921 + 445267.1114034*T)  % 360 + 360) % 360;  // mean elongation
-  const M  = ((357.5291092 + 35999.0502909*T)   % 360 + 360) % 360;  // Sun mean anomaly
-  const Mp = ((134.9633964 + 477198.8675055*T)  % 360 + 360) % 360;  // Moon mean anomaly
-  const F  = ((93.2720950  + 483202.0175233*T)  % 360 + 360) % 360;  // arg of latitude
-  // Longitude corrections (degrees) — 15 largest terms
+  const T = days / 36525.0;
+  const Lp = ((218.3164477 + 481267.88123421*T) % 360 + 360) % 360;
+  const D  = ((297.8501921 + 445267.1114034*T)  % 360 + 360) % 360;
+  const M  = ((357.5291092 + 35999.0502909*T)   % 360 + 360) % 360;
+  const Mp = ((134.9633964 + 477198.8675055*T)  % 360 + 360) % 360;
+  const F  = ((93.2720950  + 483202.0175233*T)  % 360 + 360) % 360;
   const dL = (6.288774 * Math.sin(Mp*DEG)
             + 1.274027 * Math.sin((2*D - Mp)*DEG)
             + 0.658314 * Math.sin(2*D*DEG)
@@ -736,14 +682,12 @@ function getMoonLongitude(days) {
   return ((Lp + dL) % 360 + 360) % 360;
 }
 
-// ── Rahu (true node) mean position — improved formula
 function getRahuLongitude(days) {
   const T = days / 36525.0;
   const Om = ((125.0445479 - 1934.1362608*T) % 360 + 360) % 360;
   return Om;
 }
 
-// Is a planet currently retrograde? Compare longitude 0.5 day apart
 function isRetrograde(body, days) {
   if (body === 'moon' || body === 'sun' || body === 'rahu') return false;
   const a1 = getAngle(body, days - 0.5);
@@ -754,48 +698,32 @@ function isRetrograde(body, days) {
   return diff < 0;
 }
 
-// ── JCE Structural Constants (all sidereal degrees, from Notes 1–18)
-// Galactic-ecliptic crossings (Note 5 / Note 18 two-layer refinement)
 const GALACTIC_CROSSINGS = [
-  { lon: 66.0,  label: 'GC-N', color: '#4CA8C9', note: 'Summer galactic crossing · Rahu exaltation · Ecliptic enters galactic N. hemisphere' },
-  { lon: 246.2, label: '⊗',    color: '#C94C6A', note: 'Ecliptic-galactic node (Layer A, Note 18) · 246.2° sidereal' },
+  { lon: 66.0,  label: 'GC-N', color: '#4CA8C9', note: 'Summer galactic crossing · Rahu exaltation' },
+  { lon: 246.2, label: '⊗',    color: '#C94C6A', note: 'Ecliptic-galactic node (Layer A, Note 18)' },
 ];
-// Layer B: Sgr A* actual galactic center (Note 18) — 3.2° inside the ecliptic node
-const SGR_A_LON = 243.0;  // sidereal degrees
+const SGR_A_LON = 243.0;
 
-// ── Note 17: Galactic phase + nodal axis alignment
-// GC-GAC axis as a line (symmetric): Sgr A* 243° ↔ GAC 63°
-// Represented as the 0–180° "direction" of the axis
-const GC_AXIS_DIR = 63.0;  // 243 - 180 = 63° (or equivalently 243°)
+const GC_AXIS_DIR = 63.0;
+const PHASE2_PEAK_DAYS = -17716;
+const T3_DAYS = 25920 * 365.25;
+const WS_SID_J2000 = 246.02;
 
-// Four-phase galactic cycle (Note 17 §1)
-// Phase 2 peak: ~1951 CE = J2000 - 48.5yr = J2000 - 17716 days
-const PHASE2_PEAK_DAYS = -17716;  // days since J2000
-const T3_DAYS = 25920 * 365.25;   // full precession in days
-// WS sidereal position at J2000 (tropical WS = 270° tropical → sidereal ≈ 246.02°)
-const WS_SID_J2000 = 246.02;      // approx sidereal winter solstice at J2000
-
-// Primary prediction window (Note 17 §3.3): Oct 2029 – Jun 2030
-// Oct 1 2029 ≈ J2000 + 10866 days; Jun 1 2030 ≈ J2000 + 11109 days
-const PRED_WINDOW_START = 10866;  // days since J2000
-const PRED_WINDOW_PEAK  = 10940;  // ~2029.95 — Rahu deepest in Mula
+const PRED_WINDOW_START = 10866;
+const PRED_WINDOW_PEAK  = 10940;
 const PRED_WINDOW_END   = 11109;
 
-// ── Nodal axis alignment to GC-GAC axis (Note 17)
-// Returns angle in degrees (0° = perfect alignment, 90° = maximum misalignment)
 function nodalAxisAlignment(rahuLon) {
-  const rahuAxis = rahuLon % 180;  // collapse to 0–180° line direction
+  const rahuAxis = rahuLon % 180;
   let diff = Math.abs(rahuAxis - GC_AXIS_DIR);
   if (diff > 90) diff = 180 - diff;
-  return diff;  // 0° = aligned, 90° = perpendicular
+  return diff;
 }
 
-// ── WS sidereal longitude at a given day (approximate: precesses ~50.3"/yr)
 function wsSidereal(days) {
   return ((WS_SID_J2000 - days * (50.3 / 3600) / 365.25) % 360 + 360) % 360;
 }
 
-// ── WS deviation from Sgr A* (243.0°) — Note 17 §2 current position
 function wsDeviationFromGC(days) {
   const ws = wsSidereal(days);
   let d = Math.abs(ws - SGR_A_LON);
@@ -803,22 +731,20 @@ function wsDeviationFromGC(days) {
   return d;
 }
 
-// Exaltation degrees (Note 5/6) — sidereal
 const EXALT_DEGREES = [
-  { lon: 10,  body: '☉', color: '#FFD97A' },  // Sun
-  { lon: 43,  body: '☽', color: '#B8C8E8' },  // Moon
-  { lon: 60,  body: '☊', color: '#4CA8C9' },  // Rahu
-  { lon: 95,  body: '♃', color: '#C4A882' },  // Jupiter
-  { lon: 165, body: '☿', color: '#9ABCB0' },  // Mercury
-  { lon: 200, body: '♄', color: '#A8B090' },  // Saturn
-  { lon: 240, body: '☋', color: '#C94C6A' },  // Ketu
-  { lon: 298, body: '♂', color: '#C96A4C' },  // Mars
-  { lon: 357, body: '♀', color: '#D4A574' },  // Venus
+  { lon: 10,  body: '☉', color: '#FFD97A' },
+  { lon: 43,  body: '☽', color: '#B8C8E8' },
+  { lon: 60,  body: '☊', color: '#4CA8C9' },
+  { lon: 95,  body: '♃', color: '#C4A882' },
+  { lon: 165, body: '☿', color: '#9ABCB0' },
+  { lon: 200, body: '♄', color: '#A8B090' },
+  { lon: 240, body: '☋', color: '#C94C6A' },
+  { lon: 298, body: '♂', color: '#C96A4C' },
+  { lon: 357, body: '♀', color: '#D4A574' },
 ];
 
-// Abhijit band (Note 1) — sidereal
-const ABHIJIT_START = 276 + 40/60;           // 276°40'
-const ABHIJIT_END   = 280 + 53/60 + 20/3600; // 280°53'20"
+const ABHIJIT_START = 276 + 40/60;
+const ABHIJIT_END   = 280 + 53/60 + 20/3600;
 
 function isInAbhijit(siderealLon) {
   return siderealLon >= ABHIJIT_START && siderealLon <= ABHIJIT_END;
@@ -828,8 +754,6 @@ function isInAbhijit(siderealLon) {
 // NAKSHATRA + VIMSHOTTARI ENGINE
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 27 nakshatras in order, each 13.333° of sidereal longitude
-// lord cycles through: Ketu, Venus, Sun, Moon, Mars, Rahu, Jupiter, Saturn, Mercury
 const NAKSHATRA_LORDS = [
   'Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'
 ];
@@ -841,19 +765,15 @@ const NAKSHATRA_NAMES = [
   'Shatabhisha','Purva Bhadrapada','Uttara Bhadrapada','Revati'
 ];
 
-// ── Anchor Nakshatras (Note 13) — galactic frame waypoints
-// These are the five nakshatras structurally anchored to galactic features.
-// They serve as the reference frame for the nodal transit schedule (Note 17).
 const ANCHOR_NAKSHATRAS = {
   'Mrigashira':  { idx: 4,  galactic: 'GAC lower bracket',  star: 'Betelgeuse', color: '#A0C4FF', note: '53°–67° · Betelgeuse · GAC lower bracket' },
-  'Ardra':       { idx: 5,  galactic: 'GAC upper bracket',  star: 'Rigel',      color: '#A0C4FF', note: '67°–80° · Rigel · GAC upper bracket (calibration epoch VE)' },
+  'Ardra':       { idx: 5,  galactic: 'GAC upper bracket',  star: 'Rigel',      color: '#A0C4FF', note: '67°–80° · Rigel · GAC upper bracket' },
   'Pushya':      { idx: 7,  galactic: 'σ-floor / Sirius',   star: 'Sirius',     color: '#FFD97A', note: '100°–113° · Sirius · σ-floor anchor' },
   'Chitra':      { idx: 13, galactic: 'Autumnal equinox',   star: 'Spica',      color: '#C9A84C', note: '173°–187° · Spica · exact autumnal equinox crossing' },
   'Mula':        { idx: 18, galactic: 'Galactic Center',    star: 'Sgr A*',     color: '#C94C6A', note: '240°–253° · Sgr A* · galactic root (primary anchor)' },
 };
-const ANCHOR_NAK_SPAN = 360 / 27;  // 13.333°
+const ANCHOR_NAK_SPAN = 360 / 27;
 
-// Vimshottari dasha years in lord order
 const DASHA_YEARS = { Ketu:7, Venus:20, Sun:6, Moon:10, Mars:7, Rahu:18, Jupiter:16, Saturn:19, Mercury:17 };
 const DASHA_ORDER = ['Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'];
 const DASHA_COLORS = {
@@ -861,113 +781,70 @@ const DASHA_COLORS = {
   Mars:'#C96A4C', Rahu:'#4CA8C9', Jupiter:'#C4A882', Saturn:'#A8B090', Mercury:'#9ABCB0'
 };
 
-// Returns nakshatra data for a given sidereal Moon longitude
 function getNakshatra(sidLon) {
   const lon = ((sidLon % 360) + 360) % 360;
-
-  // Check Abhijit band first
   if (lon >= ABHIJIT_START && lon <= ABHIJIT_END) {
     const frac = (lon - ABHIJIT_START) / (ABHIJIT_END - ABHIJIT_START);
-    return {
-      name: 'Abhijit ✦',
-      lord: 'Sun',  // Abhijit sits at the Sun-Moon nakshatra junction, Sun as lord
-      index: 21.5,  // between Uttara Ashadha (21) and Shravana (22)
-      frac,
-      span: ABHIJIT_END - ABHIJIT_START,  // 4.222° — correction span
-      isAbhijit: true
-    };
+    return { name: 'Abhijit ✦', lord: 'Sun', index: 21.5, frac,
+             span: ABHIJIT_END - ABHIJIT_START, isAbhijit: true };
   }
-
   const idx = Math.floor(lon / (360/27));
   const within = lon - idx * (360/27);
   const frac = within / (360/27);
   const lordIdx = idx % 9;
-  return {
-    name: NAKSHATRA_NAMES[idx],
-    lord: NAKSHATRA_LORDS[lordIdx],
-    index: idx,
-    frac,
-    span: 360/27,
-    isAbhijit: false
-  };
+  return { name: NAKSHATRA_NAMES[idx], lord: NAKSHATRA_LORDS[lordIdx],
+           index: idx, frac, span: 360/27, isAbhijit: false };
 }
 
-// Compute full Vimshottari state from Moon sidereal longitude + elapsed days since that Moon position
-// Returns { md, ad, mdFrac, adFrac, mdRemaining, adRemaining, mdNext, adNext }
 function getVimshottari(moonSidLon, elapsedYears) {
   const nak = getNakshatra(moonSidLon);
   const lord = nak.lord;
   const lordYears = DASHA_YEARS[lord];
-
-  // Balance of lord's dasha remaining at the reference moment
-  // = fraction remaining through nakshatra × lord's full period
   const balanceAtRef = (1 - nak.frac) * lordYears;
-
-  // Build the dasha sequence from this lord forward
   const lordIdx = DASHA_ORDER.indexOf(lord);
   let t = 0;
   let md = null, mdStart = 0, mdEnd = 0;
-
-  // Walk through dashas until we find where elapsedYears falls
-  for (let i = 0; i < 9 * 10; i++) {  // max 90 dashas (10 full cycles)
+  for (let i = 0; i < 9 * 10; i++) {
     const di = (lordIdx + i) % 9;
     const dLord = DASHA_ORDER[di];
     const dYears = (i === 0) ? balanceAtRef : DASHA_YEARS[dLord];
     if (t + dYears > elapsedYears) {
-      md = dLord;
-      mdStart = t;
-      mdEnd = t + dYears;
-      break;
+      md = dLord; mdStart = t; mdEnd = t + dYears; break;
     }
     t += dYears;
   }
-
   if (!md) return null;
-
   const mdElapsed = elapsedYears - mdStart;
   const mdTotal   = mdEnd - mdStart;
   const mdFrac    = mdElapsed / mdTotal;
   const mdRemaining = mdTotal - mdElapsed;
   const mdNext    = DASHA_ORDER[(DASHA_ORDER.indexOf(md) + 1) % 9];
-
-  // Antardasha within MD
-  // Sub-periods: each AD = (MD_years × AD_lord_years) / 120
-  // AD order starts from the MD lord itself
   const mdLordIdx = DASHA_ORDER.indexOf(md);
   let adT = 0;
   let ad = null, adStart = 0, adEnd = 0;
-
   for (let i = 0; i < 9; i++) {
     const ai = (mdLordIdx + i) % 9;
     const adLord = DASHA_ORDER[ai];
     const adYears = (mdTotal * DASHA_YEARS[adLord]) / 120;
     if (adT + adYears > mdElapsed) {
-      ad = adLord;
-      adStart = adT;
-      adEnd = adT + adYears;
-      break;
+      ad = adLord; adStart = adT; adEnd = adT + adYears; break;
     }
     adT += adYears;
   }
-
   if (!ad) ad = md;
   const adElapsed   = mdElapsed - adStart;
   const adTotal     = adEnd - adStart;
   const adFrac      = adTotal > 0 ? adElapsed / adTotal : 0;
   const adRemaining = adTotal - adElapsed;
   const adNext      = DASHA_ORDER[(DASHA_ORDER.indexOf(ad) + 1) % 9];
-
   return { md, mdFrac, mdRemaining, mdNext, mdTotal,
-           ad, adFrac, adRemaining, adNext, adTotal,
-           nakshatra: nak };
+           ad, adFrac, adRemaining, adNext, adTotal, nakshatra: nak };
 }
 
-// Convert a JS Date to days since J2000
 function dateToDays(date) {
-  return (date.getTime() / 86400000) - 10957.5;  // JD offset → days since J2000
+  return (date.getTime() / 86400000) - 10957.5;
 }
 
-// ── Heliocentric display angle (for helio mode)
 function getHelioAngle(body, days) {
   if (body === 'earth') {
     const e = helioXY('earth', days);
@@ -980,20 +857,17 @@ function getHelioAngle(body, days) {
   return ((lon - (siderealMode ? ayanamsha(days) : 0)) % 360 + 360) % 360;
 }
 
-// ── Earth-planet distance in AU (for apparent size)
 function getDistance(body, days) {
-  if (body === 'moon') return 0.00257;  // fixed ~384,000 km in AU
+  if (body === 'moon') return 0.00257;
   if (body === 'sun')  return 1.0;
   const earth = helioXY('earth', days);
   const planet = helioXY(body, days);
   return Math.sqrt((planet.x-earth.x)**2 + (planet.y-earth.y)**2);
 }
 
-// ── Phase angle for inferior planets (Sun-Planet-Earth angle)
 function getPhaseAngle(body, days) {
   const earth  = helioXY('earth', days);
   const planet = helioXY(body, days);
-  // Vector planet→sun and planet→earth
   const ps = { x: -planet.x, y: -planet.y };
   const pe = { x: earth.x - planet.x, y: earth.y - planet.y };
   const dot = ps.x*pe.x + ps.y*pe.y;
@@ -1001,30 +875,22 @@ function getPhaseAngle(body, days) {
   return Math.acos(Math.max(-1, Math.min(1, dot/mag)));
 }
 
-// ── Draw Earth at (cx, cy) with radius r
 function drawEarth(cx, cy, r) {
   ctx.save();
-  // Atmosphere outer glow
   const atm = ctx.createRadialGradient(cx, cy, r*0.85, cx, cy, r*2.2);
   atm.addColorStop(0, 'rgba(100,160,255,0.25)');
   atm.addColorStop(0.5,'rgba(80,130,220,0.10)');
   atm.addColorStop(1, 'rgba(60,100,200,0)');
   ctx.beginPath(); ctx.arc(cx, cy, r*2.2, 0, TWO_PI);
   ctx.fillStyle = atm; ctx.fill();
-
-  // Ocean base
   const ocean = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, 0, cx, cy, r);
   ocean.addColorStop(0,   '#4A90D9');
   ocean.addColorStop(0.5, '#2060B0');
   ocean.addColorStop(1,   '#0A3070');
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
   ctx.fillStyle = ocean; ctx.fill();
-
-  // Continent silhouettes — simplified polygons scaled to radius
-  const s = r / 18;  // scale factor (designed at r=18)
+  const s = r / 18;
   ctx.fillStyle = 'rgba(60,110,50,0.75)';
-
-  // Americas (left side)
   ctx.beginPath();
   ctx.moveTo(cx + s*(-12), cy + s*(-10));
   ctx.lineTo(cx + s*(-7),  cy + s*(-14));
@@ -1038,8 +904,6 @@ function drawEarth(cx, cy, r) {
   ctx.lineTo(cx + s*(-14), cy + s*(4));
   ctx.lineTo(cx + s*(-11), cy + s*(-2));
   ctx.closePath(); ctx.fill();
-
-  // Eurasia + Africa (right side)
   ctx.beginPath();
   ctx.moveTo(cx + s*(0),   cy + s*(-14));
   ctx.lineTo(cx + s*(12),  cy + s*(-13));
@@ -1054,8 +918,6 @@ function drawEarth(cx, cy, r) {
   ctx.lineTo(cx + s*(2),   cy + s*(-5));
   ctx.lineTo(cx + s*(1),   cy + s*(-10));
   ctx.closePath(); ctx.fill();
-
-  // Australia (bottom right)
   ctx.beginPath();
   ctx.moveTo(cx + s*(9),   cy + s*(8));
   ctx.lineTo(cx + s*(14),  cy + s*(7));
@@ -1063,35 +925,26 @@ function drawEarth(cx, cy, r) {
   ctx.lineTo(cx + s*(10),  cy + s*(15));
   ctx.lineTo(cx + s*(7),   cy + s*(13));
   ctx.closePath(); ctx.fill();
-
-  // Cloud wisps
   ctx.fillStyle = 'rgba(255,255,255,0.18)';
   ctx.beginPath(); ctx.ellipse(cx+s*(-5), cy+s*(-6), s*7, s*2, -0.4, 0, TWO_PI); ctx.fill();
   ctx.beginPath(); ctx.ellipse(cx+s*(6),  cy+s*(4),  s*5, s*1.5, 0.3, 0, TWO_PI); ctx.fill();
   ctx.beginPath(); ctx.ellipse(cx+s*(-2), cy+s*(8),  s*4, s*1.5, -0.2,0, TWO_PI); ctx.fill();
-
-  // Atmosphere rim
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
   const rim = ctx.createRadialGradient(cx, cy, r*0.88, cx, cy, r);
   rim.addColorStop(0, 'rgba(100,180,255,0)');
   rim.addColorStop(1, 'rgba(120,200,255,0.45)');
   ctx.fillStyle = rim; ctx.fill();
-
   ctx.restore();
 }
 
-// ── Draw Sun at (cx, cy) with radius r
 function drawSun(cx, cy, r) {
   ctx.save();
-  // Outer corona glow
   const corona = ctx.createRadialGradient(cx, cy, r*0.8, cx, cy, r*4);
   corona.addColorStop(0,   'rgba(255,220,80,0.35)');
   corona.addColorStop(0.3, 'rgba(255,160,30,0.15)');
   corona.addColorStop(1,   'rgba(255,100,0,0)');
   ctx.beginPath(); ctx.arc(cx, cy, r*4, 0, TWO_PI);
   ctx.fillStyle = corona; ctx.fill();
-
-  // Corona ray lines
   ctx.strokeStyle = 'rgba(255,200,60,0.12)';
   ctx.lineWidth = 1.5;
   for (let i = 0; i < 12; i++) {
@@ -1101,8 +954,6 @@ function drawSun(cx, cy, r) {
     ctx.lineTo(cx + r*2.8*Math.cos(a), cy + r*2.8*Math.sin(a));
     ctx.stroke();
   }
-
-  // Solar surface
   const surface = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, 0, cx, cy, r);
   surface.addColorStop(0,   '#FFF5CC');
   surface.addColorStop(0.3, '#FFE066');
@@ -1110,29 +961,21 @@ function drawSun(cx, cy, r) {
   surface.addColorStop(1,   '#E07010');
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
   ctx.fillStyle = surface; ctx.fill();
-
-  // Limb darkening
   const limb = ctx.createRadialGradient(cx, cy, r*0.7, cx, cy, r);
   limb.addColorStop(0, 'rgba(0,0,0,0)');
   limb.addColorStop(1, 'rgba(80,20,0,0.35)');
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
   ctx.fillStyle = limb; ctx.fill();
-
   ctx.restore();
 }
+
 const TRAIL_LEN = 180;
 const TRAIL_STEP = 2;
 const trails = {};
 ['mercury','venus','mars','jupiter','saturn'].forEach(b => { trails[b] = []; });
 let lastTrailDay = null;
 
-// ── Retrograde stamp system
-// Records Station Retrograde (SR) at episode entry and Station Direct (SD) at exit.
-// SR = d(lambda)/dt crosses zero + to - (planet stops, begins retrograde)
-// SD = d(lambda)/dt crosses zero - to + (planet resumes direct motion)
-// Paper 11.2: "each petal tip is a SR; each petal base is a SD"
-// Each stamp: { angle, days, type: 'SR' | 'SD' }
-const MAX_STAMPS = 80;  // per planet (SR + SD pairs, so ~40 episodes)
+const MAX_STAMPS = 80;
 const stamps = {};
 const prevRetro = {};
 ['mercury','venus','mars','jupiter','saturn'].forEach(b => {
@@ -1143,13 +986,11 @@ const prevRetro = {};
 function updateStamps(b, days) {
   const r = isRetrograde(b, days);
   if (!prevRetro[b] && r) {
-    // SR: planet just entered retrograde
     const angle = displayAngle(b, days);
     stamps[b].push({ angle, days, type: 'SR' });
     if (stamps[b].length > MAX_STAMPS) stamps[b].shift();
   }
   if (prevRetro[b] && !r) {
-    // SD: planet just resumed direct motion
     const angle = displayAngle(b, days);
     stamps[b].push({ angle, days, type: 'SD' });
     if (stamps[b].length > MAX_STAMPS) stamps[b].shift();
@@ -1158,13 +999,8 @@ function updateStamps(b, days) {
 }
 
 function toCanvas(angleDeg, r) {
-  // 0° = right, astronomical convention: 0° Aries at top, increasing CCW
-  // We map: Aries (0°) = top of face = -PI/2
   const rad = (angleDeg - 90) * DEG;
-  return {
-    x: CX + r * Math.cos(rad),
-    y: CY + r * Math.sin(rad),
-  };
+  return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
 }
 
 function signOf(deg) {
@@ -1179,7 +1015,6 @@ function fmtDeg(d) {
 }
 
 function jdToDate(jd) {
-  // Convert JD to Gregorian
   const z = Math.floor(jd + 0.5);
   const f = jd + 0.5 - z;
   let a;
@@ -1205,398 +1040,264 @@ function jdToDate(jd) {
 
 function drawWatch(days) {
   ctx.clearRect(0, 0, W, H);
-
-  // ── Background
   const bgGrad = ctx.createRadialGradient(CX, CY, 0, CX, CY, R_FACE);
   bgGrad.addColorStop(0,   '#111420');
   bgGrad.addColorStop(0.6, '#0A0D14');
   bgGrad.addColorStop(1,   '#060810');
-  ctx.beginPath();
-  ctx.arc(CX, CY, R_FACE, 0, TWO_PI);
-  ctx.fillStyle = bgGrad;
-  ctx.fill();
-
-  // ── Bezel glow
-  ctx.beginPath();
-  ctx.arc(CX, CY, R_FACE, 0, TWO_PI);
-  ctx.strokeStyle = 'rgba(201,168,76,0.25)';
-  ctx.lineWidth = 8;
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(201,168,76,0.6)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // ── Tilt mark (obliquity) — subtle diagonal line
+  ctx.beginPath(); ctx.arc(CX, CY, R_FACE, 0, TWO_PI);
+  ctx.fillStyle = bgGrad; ctx.fill();
+  ctx.beginPath(); ctx.arc(CX, CY, R_FACE, 0, TWO_PI);
+  ctx.strokeStyle = 'rgba(201,168,76,0.25)'; ctx.lineWidth = 8; ctx.stroke();
+  ctx.strokeStyle = 'rgba(201,168,76,0.6)';  ctx.lineWidth = 1.5; ctx.stroke();
   ctx.save();
   ctx.rotate(OBLIQUITY);
   ctx.strokeStyle = 'rgba(201,168,76,0.08)';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([4, 8]);
-  ctx.beginPath();
-  ctx.moveTo(CX - R_FACE * 0.9, CY);
-  ctx.lineTo(CX + R_FACE * 0.9, CY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
+  ctx.lineWidth = 1; ctx.setLineDash([4, 8]);
+  ctx.beginPath(); ctx.moveTo(CX - R_FACE*0.9, CY); ctx.lineTo(CX + R_FACE*0.9, CY);
+  ctx.stroke(); ctx.setLineDash([]); ctx.restore();
 
-  // ── Zodiac belt — sidereal frame (fixed to stars, not VE)
   const ZODIAC_INNER = R_FACE * 0.84;
   const ZODIAC_OUTER = R_FACE * 0.96;
   const zodiacGlyph = ['♈','♉','♊','♋','♌','♍','♎','♏','♐','♑','♒','♓'];
-
-  // In sidereal mode: 0° sidereal Aries is at top of face
-  // In tropical mode: 0° tropical Aries (VE) is at top — shift belt by ayanamsha
-  const beltOffset = siderealMode ? 0 : 0;  // belt always sidereal; planets shift
+  const beltOffset = 0;
 
   for (let s = 0; s < 12; s++) {
     const startAngle = (s * 30 + beltOffset - 90) * DEG;
-    // dividers
     ctx.beginPath();
     ctx.moveTo(CX + ZODIAC_INNER * Math.cos(startAngle), CY + ZODIAC_INNER * Math.sin(startAngle));
     ctx.lineTo(CX + ZODIAC_OUTER * Math.cos(startAngle), CY + ZODIAC_OUTER * Math.sin(startAngle));
-    ctx.strokeStyle = 'rgba(201,168,76,0.3)';
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
-    // glyph
+    ctx.strokeStyle = 'rgba(201,168,76,0.3)'; ctx.lineWidth = 0.5; ctx.stroke();
     const midAngle = (s * 30 + 15 + beltOffset - 90) * DEG;
     const gr = (ZODIAC_INNER + ZODIAC_OUTER) / 2;
     ctx.save();
     ctx.translate(CX + gr * Math.cos(midAngle), CY + gr * Math.sin(midAngle));
     ctx.rotate(midAngle + Math.PI / 2);
-    ctx.font = '9px serif';
-    ctx.fillStyle = 'rgba(201,168,76,0.5)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(zodiacGlyph[s], 0, 0);
-    ctx.restore();
+    ctx.font = '9px serif'; ctx.fillStyle = 'rgba(201,168,76,0.5)';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(zodiacGlyph[s], 0, 0); ctx.restore();
   }
-  // zodiac ring borders
   ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_INNER, 0, TWO_PI);
   ctx.strokeStyle = 'rgba(201,168,76,0.2)'; ctx.lineWidth = 0.5; ctx.stroke();
-  ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_OUTER, 0, TWO_PI);
-  ctx.stroke();
+  ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_OUTER, 0, TWO_PI); ctx.stroke();
 
-  // ── Anchor nakshatra arcs (Note 13) — galactic frame waypoints
-  // Always drawn faintly; illuminate when Moon is in that nakshatra
+  // Anchor nakshatra arcs
   {
     const moonSidForAnchors = getSiderealAngle('moon', days);
     const moonNak = getNakshatra(moonSidForAnchors);
     const R_ANC_INNER = ZODIAC_INNER - 6;
     const R_ANC_OUTER = ZODIAC_INNER - 1;
-
     Object.entries(ANCHOR_NAKSHATRAS).forEach(([name, anc]) => {
       const startDeg = anc.idx * ANCHOR_NAK_SPAN;
       const endDeg   = startDeg + ANCHOR_NAK_SPAN;
       const a1 = (startDeg + beltOffset - 90) * DEG;
       const a2 = (endDeg   + beltOffset - 90) * DEG;
       const isMoonHere = moonNak.name.replace(' ✦','') === name;
-
-      // Arc fill
       ctx.beginPath();
       ctx.arc(CX, CY, R_ANC_OUTER, a1, a2);
       ctx.arc(CX, CY, R_ANC_INNER, a2, a1, true);
       ctx.closePath();
       ctx.fillStyle = anc.color;
-      ctx.globalAlpha = isMoonHere ? 0.35 : 0.07;
-      ctx.fill();
-      ctx.globalAlpha = 1.0;
-
-      // Arc border
-      ctx.beginPath();
-      ctx.arc(CX, CY, R_ANC_OUTER, a1, a2);
+      ctx.globalAlpha = isMoonHere ? 0.35 : 0.07; ctx.fill(); ctx.globalAlpha = 1.0;
+      ctx.beginPath(); ctx.arc(CX, CY, R_ANC_OUTER, a1, a2);
       ctx.strokeStyle = anc.color;
       ctx.lineWidth = isMoonHere ? 1.2 : 0.5;
-      ctx.globalAlpha = isMoonHere ? 0.8 : 0.2;
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
-
-      // Small radial tick at start boundary (structural marker)
+      ctx.globalAlpha = isMoonHere ? 0.8 : 0.2; ctx.stroke(); ctx.globalAlpha = 1.0;
       ctx.beginPath();
-      ctx.moveTo(CX + (R_ANC_INNER - 3) * Math.cos(a1), CY + (R_ANC_INNER - 3) * Math.sin(a1));
-      ctx.lineTo(CX + (R_ANC_OUTER + 3) * Math.cos(a1), CY + (R_ANC_OUTER + 3) * Math.sin(a1));
-      ctx.strokeStyle = anc.color;
-      ctx.lineWidth = 0.8;
-      ctx.globalAlpha = isMoonHere ? 0.7 : 0.18;
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
-
-      // Label: first letter of star name at mid-arc, only when Moon is here or at slowest speeds
+      ctx.moveTo(CX + (R_ANC_INNER-3)*Math.cos(a1), CY + (R_ANC_INNER-3)*Math.sin(a1));
+      ctx.lineTo(CX + (R_ANC_OUTER+3)*Math.cos(a1), CY + (R_ANC_OUTER+3)*Math.sin(a1));
+      ctx.strokeStyle = anc.color; ctx.lineWidth = 0.8;
+      ctx.globalAlpha = isMoonHere ? 0.7 : 0.18; ctx.stroke(); ctx.globalAlpha = 1.0;
       if (isMoonHere || speedIdx <= 1) {
-        const midAngle = (startDeg + ANCHOR_NAK_SPAN / 2 + beltOffset - 90) * DEG;
+        const midAngle = (startDeg + ANCHOR_NAK_SPAN/2 + beltOffset - 90) * DEG;
         const labelR = (R_ANC_INNER + R_ANC_OUTER) / 2;
         ctx.save();
-        ctx.translate(CX + labelR * Math.cos(midAngle), CY + labelR * Math.sin(midAngle));
-        ctx.rotate(midAngle + Math.PI / 2);
+        ctx.translate(CX + labelR*Math.cos(midAngle), CY + labelR*Math.sin(midAngle));
+        ctx.rotate(midAngle + Math.PI/2);
         ctx.font = `bold ${isMoonHere ? 7 : 5.5}px Cinzel, serif`;
         ctx.fillStyle = anc.color;
         ctx.globalAlpha = isMoonHere ? 0.95 : 0.35;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(anc.star[0], 0, 0);  // first letter: S(irius), R(igel), B(etelgeuse), S(pica), S(gr A*)
-        ctx.globalAlpha = 1.0;
-        ctx.restore();
+        ctx.fillText(anc.star[0], 0, 0); ctx.globalAlpha = 1.0; ctx.restore();
       }
     });
   }
 
-  // ── Abhijit band (Note 1) — 276°40' to 280°53'20" sidereal
+  // Abhijit band
   {
     const a1 = (ABHIJIT_START + beltOffset - 90) * DEG;
     const a2 = (ABHIJIT_END   + beltOffset - 90) * DEG;
     ctx.beginPath();
-    ctx.arc(CX, CY, ZODIAC_INNER - 2, a1, a2);
-    ctx.arc(CX, CY, ZODIAC_OUTER + 2, a2, a1, true);
+    ctx.arc(CX, CY, ZODIAC_INNER-2, a1, a2);
+    ctx.arc(CX, CY, ZODIAC_OUTER+2, a2, a1, true);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(245,229,160,0.12)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(245,229,160,0.5)';
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-    // label
-    const aMid = (ABHIJIT_START + (ABHIJIT_END - ABHIJIT_START)/2 + beltOffset - 90) * DEG;
+    ctx.fillStyle = 'rgba(245,229,160,0.12)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(245,229,160,0.5)'; ctx.lineWidth = 0.8; ctx.stroke();
+    const aMid = (ABHIJIT_START + (ABHIJIT_END-ABHIJIT_START)/2 + beltOffset - 90) * DEG;
     const aLabelR = ZODIAC_OUTER + 9;
     ctx.save();
-    ctx.translate(CX + aLabelR * Math.cos(aMid), CY + aLabelR * Math.sin(aMid));
+    ctx.translate(CX + aLabelR*Math.cos(aMid), CY + aLabelR*Math.sin(aMid));
     ctx.rotate(aMid + Math.PI/2);
-    ctx.font = 'bold 7px Cinzel, serif';
-    ctx.fillStyle = 'rgba(245,229,160,0.8)';
+    ctx.font = 'bold 7px Cinzel, serif'; ctx.fillStyle = 'rgba(245,229,160,0.8)';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('✦', 0, 0);
-    ctx.restore();
+    ctx.fillText('✦', 0, 0); ctx.restore();
   }
 
-  // ── Galactic crossing markers (Notes 5 + 18) — two-layer bezel on winter side
+  // Galactic crossing markers
   GALACTIC_CROSSINGS.forEach((gc, idx) => {
     const gcRad = (gc.lon + beltOffset - 90) * DEG;
-
     if (idx === 0) {
-      // GC-N (summer crossing, 66°) — single tick as before
       const gcR1 = ZODIAC_INNER - 4;
       const gcR2 = ZODIAC_OUTER + 4;
       ctx.beginPath();
-      ctx.moveTo(CX + gcR1 * Math.cos(gcRad), CY + gcR1 * Math.sin(gcRad));
-      ctx.lineTo(CX + gcR2 * Math.cos(gcRad), CY + gcR2 * Math.sin(gcRad));
-      ctx.strokeStyle = gc.color;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.7;
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
+      ctx.moveTo(CX + gcR1*Math.cos(gcRad), CY + gcR1*Math.sin(gcRad));
+      ctx.lineTo(CX + gcR2*Math.cos(gcRad), CY + gcR2*Math.sin(gcRad));
+      ctx.strokeStyle = gc.color; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.7;
+      ctx.stroke(); ctx.globalAlpha = 1.0;
       ctx.save();
-      ctx.translate(CX + (gcR2 + 8) * Math.cos(gcRad), CY + (gcR2 + 8) * Math.sin(gcRad));
+      ctx.translate(CX + (gcR2+8)*Math.cos(gcRad), CY + (gcR2+8)*Math.sin(gcRad));
       ctx.rotate(gcRad + Math.PI/2);
-      ctx.font = 'bold 7px Cinzel, serif';
-      ctx.fillStyle = gc.color;
+      ctx.font = 'bold 7px Cinzel, serif'; ctx.fillStyle = gc.color;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(gc.label, 0, 0);
-      ctx.restore();
-
+      ctx.fillText(gc.label, 0, 0); ctx.restore();
     } else {
-      // ── Winter side: two-layer bezel (Note 18)
-      // Layer A: ecliptic-galactic NODE at 246.2° — outer bezel tick
       const nodeRad = gcRad;
-      const outerFrom = ZODIAC_OUTER;
-      const outerTo   = ZODIAC_OUTER + 10;
       ctx.beginPath();
-      ctx.moveTo(CX + outerFrom * Math.cos(nodeRad), CY + outerFrom * Math.sin(nodeRad));
-      ctx.lineTo(CX + outerTo   * Math.cos(nodeRad), CY + outerTo   * Math.sin(nodeRad));
-      ctx.strokeStyle = gc.color;
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.85;
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
-      // Layer A label (outside bezel)
+      ctx.moveTo(CX + ZODIAC_OUTER*Math.cos(nodeRad), CY + ZODIAC_OUTER*Math.sin(nodeRad));
+      ctx.lineTo(CX + (ZODIAC_OUTER+10)*Math.cos(nodeRad), CY + (ZODIAC_OUTER+10)*Math.sin(nodeRad));
+      ctx.strokeStyle = gc.color; ctx.lineWidth = 2; ctx.globalAlpha = 0.85;
+      ctx.stroke(); ctx.globalAlpha = 1.0;
       ctx.save();
-      ctx.translate(CX + (outerTo + 9) * Math.cos(nodeRad), CY + (outerTo + 9) * Math.sin(nodeRad));
+      ctx.translate(CX + (ZODIAC_OUTER+19)*Math.cos(nodeRad), CY + (ZODIAC_OUTER+19)*Math.sin(nodeRad));
       ctx.rotate(nodeRad + Math.PI/2);
-      ctx.font = 'bold 7px Cinzel, serif';
-      ctx.fillStyle = gc.color;
+      ctx.font = 'bold 7px Cinzel, serif'; ctx.fillStyle = gc.color;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('Node', 0, 0);
-      ctx.restore();
+      ctx.fillText('Node', 0, 0); ctx.restore();
 
-      // Layer B: Sgr A* at 243.0° — inner bezel tick
       const sgrRad = (SGR_A_LON + beltOffset - 90) * DEG;
-      const innerFrom = ZODIAC_INNER;
-      const innerTo   = ZODIAC_INNER - 10;
       ctx.beginPath();
-      ctx.moveTo(CX + innerFrom * Math.cos(sgrRad), CY + innerFrom * Math.sin(sgrRad));
-      ctx.lineTo(CX + innerTo   * Math.cos(sgrRad), CY + innerTo   * Math.sin(sgrRad));
-      ctx.strokeStyle = '#E8A0C9';  // softer magenta to distinguish from node
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.85;
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
-      // Layer B label (inside, along inner ring)
+      ctx.moveTo(CX + ZODIAC_INNER*Math.cos(sgrRad), CY + ZODIAC_INNER*Math.sin(sgrRad));
+      ctx.lineTo(CX + (ZODIAC_INNER-10)*Math.cos(sgrRad), CY + (ZODIAC_INNER-10)*Math.sin(sgrRad));
+      ctx.strokeStyle = '#E8A0C9'; ctx.lineWidth = 2; ctx.globalAlpha = 0.85;
+      ctx.stroke(); ctx.globalAlpha = 1.0;
       ctx.save();
-      ctx.translate(CX + (innerTo - 9) * Math.cos(sgrRad), CY + (innerTo - 9) * Math.sin(sgrRad));
+      ctx.translate(CX + (ZODIAC_INNER-19)*Math.cos(sgrRad), CY + (ZODIAC_INNER-19)*Math.sin(sgrRad));
       ctx.rotate(sgrRad + Math.PI/2);
-      ctx.font = 'bold 6.5px Cinzel, serif';
-      ctx.fillStyle = '#E8A0C9';
+      ctx.font = 'bold 6.5px Cinzel, serif'; ctx.fillStyle = '#E8A0C9';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('Sgr A*', 0, 0);
-      ctx.restore();
+      ctx.fillText('Sgr A*', 0, 0); ctx.restore();
 
-      // Connecting arc: faint zone from 243.0° to 246.2° on the zodiac inner ring
       const arcA = (Math.min(SGR_A_LON, gc.lon) + beltOffset - 90) * DEG;
       const arcB = (Math.max(SGR_A_LON, gc.lon) + beltOffset - 90) * DEG;
-      ctx.beginPath();
-      ctx.arc(CX, CY, ZODIAC_INNER - 2, arcA, arcB);
-      ctx.strokeStyle = '#C94C6A';
-      ctx.lineWidth = 1.2;
-      ctx.globalAlpha = 0.25;
-      ctx.stroke();
-      ctx.globalAlpha = 1.0;
+      ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_INNER-2, arcA, arcB);
+      ctx.strokeStyle = '#C94C6A'; ctx.lineWidth = 1.2; ctx.globalAlpha = 0.25;
+      ctx.stroke(); ctx.globalAlpha = 1.0;
     }
   });
 
-  // ── Note 17: GC-GAC structural axis + Rahu-Ketu live axis
+  // Note 17: GC-GAC structural axis + Rahu-Ketu live axis
   {
     const rahuSid  = getSiderealAngle('rahu', days);
     const ketuSid  = (rahuSid + 180) % 360;
-    const alignDeg = nodalAxisAlignment(rahuSid);  // 0° = aligned, 90° = perp
-    const alignFrac = 1 - alignDeg / 90;           // 1.0 = perfect, 0.0 = perp
-    const isAligned = alignDeg < 12;               // within 12° = activated
+    const alignDeg = nodalAxisAlignment(rahuSid);
+    const alignFrac = 1 - alignDeg / 90;
+    const isAligned = alignDeg < 12;
 
-    // GC-GAC background axis — fixed structural line (Sgr A* 243° ↔ GAC 63°)
     const gcRad1 = (SGR_A_LON + beltOffset - 90) * DEG;
     const gcRad2 = (63.0      + beltOffset - 90) * DEG;
     const axisR  = ZODIAC_INNER - 12;
     ctx.beginPath();
-    ctx.moveTo(CX + axisR * Math.cos(gcRad1), CY + axisR * Math.sin(gcRad1));
-    ctx.lineTo(CX + axisR * Math.cos(gcRad2), CY + axisR * Math.sin(gcRad2));
-    ctx.strokeStyle = '#C94C6A';
-    ctx.lineWidth = 0.6;
-    ctx.setLineDash([3, 6]);
-    ctx.globalAlpha = 0.18;
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1.0;
+    ctx.moveTo(CX + axisR*Math.cos(gcRad1), CY + axisR*Math.sin(gcRad1));
+    ctx.lineTo(CX + axisR*Math.cos(gcRad2), CY + axisR*Math.sin(gcRad2));
+    ctx.strokeStyle = '#C94C6A'; ctx.lineWidth = 0.6;
+    ctx.setLineDash([3,6]); ctx.globalAlpha = 0.18; ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1.0;
 
-    // Rahu-Ketu live axis — through center of face
     const rRad = (rahuSid + beltOffset - 90) * DEG;
     const kRad = (ketuSid  + beltOffset - 90) * DEG;
-    const rkR  = ORBITS['saturn'] + 16;  // just inside saturn orbit ring
+    const rkR  = ORBITS['saturn'] + 16;
 
-    // Glow when aligned
     if (isAligned) {
       ctx.beginPath();
-      ctx.moveTo(CX + rkR * Math.cos(rRad), CY + rkR * Math.sin(rRad));
-      ctx.lineTo(CX + rkR * Math.cos(kRad), CY + rkR * Math.sin(kRad));
-      ctx.strokeStyle = `rgba(76,168,201,${(alignFrac * 0.35).toFixed(2)})`;
-      ctx.lineWidth = 6;
-      ctx.stroke();
+      ctx.moveTo(CX + rkR*Math.cos(rRad), CY + rkR*Math.sin(rRad));
+      ctx.lineTo(CX + rkR*Math.cos(kRad), CY + rkR*Math.sin(kRad));
+      ctx.strokeStyle = `rgba(76,168,201,${(alignFrac*0.35).toFixed(2)})`;
+      ctx.lineWidth = 6; ctx.stroke();
     }
-
-    // Core axis line
     ctx.beginPath();
-    ctx.moveTo(CX + rkR * Math.cos(rRad), CY + rkR * Math.sin(rRad));
-    ctx.lineTo(CX + rkR * Math.cos(kRad), CY + rkR * Math.sin(kRad));
+    ctx.moveTo(CX + rkR*Math.cos(rRad), CY + rkR*Math.sin(rRad));
+    ctx.lineTo(CX + rkR*Math.cos(kRad), CY + rkR*Math.sin(kRad));
     ctx.strokeStyle = isAligned
-      ? `rgba(76,168,201,${(0.4 + alignFrac * 0.5).toFixed(2)})`
+      ? `rgba(76,168,201,${(0.4+alignFrac*0.5).toFixed(2)})`
       : 'rgba(76,168,201,0.18)';
     ctx.lineWidth = isAligned ? 1.2 : 0.7;
-    ctx.setLineDash(isAligned ? [] : [4, 6]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.setLineDash(isAligned ? [] : [4,6]); ctx.stroke(); ctx.setLineDash([]);
 
-    // Rahu endpoint dot
-    ctx.beginPath();
-    ctx.arc(CX + rkR * Math.cos(rRad), CY + rkR * Math.sin(rRad), isAligned ? 3 : 2, 0, TWO_PI);
-    ctx.fillStyle = isAligned ? '#4CA8C9' : 'rgba(76,168,201,0.3)';
-    ctx.fill();
-
-    // Ketu endpoint dot
-    ctx.beginPath();
-    ctx.arc(CX + rkR * Math.cos(kRad), CY + rkR * Math.sin(kRad), isAligned ? 3 : 2, 0, TWO_PI);
-    ctx.fillStyle = isAligned ? '#C94C6A' : 'rgba(201,76,106,0.3)';
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(CX+rkR*Math.cos(rRad), CY+rkR*Math.sin(rRad), isAligned?3:2, 0, TWO_PI);
+    ctx.fillStyle = isAligned ? '#4CA8C9' : 'rgba(76,168,201,0.3)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(CX+rkR*Math.cos(kRad), CY+rkR*Math.sin(kRad), isAligned?3:2, 0, TWO_PI);
+    ctx.fillStyle = isAligned ? '#C94C6A' : 'rgba(201,76,106,0.3)'; ctx.fill();
   }
+
   EXALT_DEGREES.forEach(ex => {
     const exRad = (ex.lon + beltOffset - 90) * DEG;
     const exR = ZODIAC_INNER - 1;
-    const p = { x: CX + exR * Math.cos(exRad), y: CY + exR * Math.sin(exRad) };
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(exRad);
-    ctx.beginPath();
-    ctx.moveTo(0, -4); ctx.lineTo(2, 0); ctx.lineTo(0, 4); ctx.lineTo(-2, 0);
-    ctx.closePath();
-    ctx.fillStyle = ex.color;
-    ctx.globalAlpha = 0.85;
-    ctx.fill();
-    ctx.globalAlpha = 1.0;
-    ctx.restore();
+    const p = { x: CX + exR*Math.cos(exRad), y: CY + exR*Math.sin(exRad) };
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(exRad);
+    ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(2,0); ctx.lineTo(0,4); ctx.lineTo(-2,0);
+    ctx.closePath(); ctx.fillStyle = ex.color; ctx.globalAlpha = 0.85; ctx.fill();
+    ctx.globalAlpha = 1.0; ctx.restore();
   });
 
-  // ── Rahu ring — slow retrograde, outermost display ring (geocentric only)
+  // Rahu/Ketu ring (geocentric only)
   const rahuAngle = displayAngle('rahu', days);
   const ketuAngle = (rahuAngle + 180) % 360;
   const R_RAHU = ZODIAC_INNER - 6;
 
   if (!helioMode) {
-  const rahuRad = (rahuAngle - 90) * DEG;
-  ctx.beginPath();
-  ctx.arc(CX, CY, R_RAHU, rahuRad - 20 * DEG, rahuRad + 20 * DEG);
-  ctx.strokeStyle = 'rgba(76,168,201,0.6)';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  // Rahu marker
-  const rp = toCanvas(rahuAngle, R_RAHU);
-  ctx.beginPath(); ctx.arc(rp.x, rp.y, 5, 0, TWO_PI);
-  ctx.fillStyle = '#4CA8C9'; ctx.fill();
+    const rahuRad = (rahuAngle - 90) * DEG;
+    ctx.beginPath();
+    ctx.arc(CX, CY, R_RAHU, rahuRad - 20*DEG, rahuRad + 20*DEG);
+    ctx.strokeStyle = 'rgba(76,168,201,0.6)'; ctx.lineWidth = 3; ctx.stroke();
+    const rp = toCanvas(rahuAngle, R_RAHU);
+    ctx.beginPath(); ctx.arc(rp.x, rp.y, 5, 0, TWO_PI);
+    ctx.fillStyle = '#4CA8C9'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(CX, CY, R_RAHU, (ketuAngle-90-20)*DEG, (ketuAngle-90+20)*DEG);
+    ctx.strokeStyle = 'rgba(201,76,106,0.6)'; ctx.lineWidth = 3; ctx.stroke();
+    const kp = toCanvas(ketuAngle, R_RAHU);
+    ctx.beginPath(); ctx.arc(kp.x, kp.y, 4, 0, TWO_PI);
+    ctx.fillStyle = '#C94C6A'; ctx.fill();
+    ctx.font = 'bold 9px Cinzel, serif';
+    ctx.fillStyle = '#4CA8C9'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('☊', rp.x, rp.y - 14);
+    ctx.fillStyle = '#C94C6A'; ctx.fillText('☋', kp.x, kp.y - 14);
+  }
 
-  // Ketu arc
-  ctx.beginPath();
-  ctx.arc(CX, CY, R_RAHU, (ketuAngle - 90 - 20) * DEG, (ketuAngle - 90 + 20) * DEG);
-  ctx.strokeStyle = 'rgba(201,76,106,0.6)';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  const kp = toCanvas(ketuAngle, R_RAHU);
-  ctx.beginPath(); ctx.arc(kp.x, kp.y, 4, 0, TWO_PI);
-  ctx.fillStyle = '#C94C6A'; ctx.fill();
-
-  // Labels
-  ctx.font = 'bold 9px Cinzel, serif';
-  ctx.fillStyle = '#4CA8C9';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('☊', rp.x, rp.y - 14);
-  ctx.fillStyle = '#C94C6A';
-  ctx.fillText('☋', kp.x, kp.y - 14);
-  } // end !helioMode (Rahu/Ketu)
-
-  // ── Orbital rings — geocentric uses fixed ORBITS, helio uses HELIO_ORBITS
+  // Orbital rings
   if (helioMode) {
     Object.values(HELIO_ORBITS).forEach(r => {
       ctx.beginPath(); ctx.arc(CX, CY, r, 0, TWO_PI);
-      ctx.strokeStyle = 'rgba(255,200,60,0.06)';
-      ctx.lineWidth = 0.5; ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,200,60,0.06)'; ctx.lineWidth = 0.5; ctx.stroke();
     });
   } else {
     const bodies = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
     bodies.forEach(b => {
       ctx.beginPath(); ctx.arc(CX, CY, ORBITS[b], 0, TWO_PI);
-      ctx.strokeStyle = 'rgba(201,168,76,0.07)';
-      ctx.lineWidth = 0.5; ctx.stroke();
+      ctx.strokeStyle = 'rgba(201,168,76,0.07)'; ctx.lineWidth = 0.5; ctx.stroke();
     });
-
-    // ── Ketu differential needle (geocentric only)
     const ketuRad = (ketuAngle - 90) * DEG;
     const needleLen = ORBITS.moon * 0.85;
-    ctx.beginPath();
-    ctx.moveTo(CX, CY);
-    ctx.lineTo(CX + needleLen * Math.cos(ketuRad), CY + needleLen * Math.sin(ketuRad));
-    ctx.strokeStyle = 'rgba(201,76,106,0.5)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3, 5]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(CX, CY);
+    ctx.lineTo(CX + needleLen*Math.cos(ketuRad), CY + needleLen*Math.sin(ketuRad));
+    ctx.strokeStyle = 'rgba(201,76,106,0.5)'; ctx.lineWidth = 1;
+    ctx.setLineDash([3,5]); ctx.stroke(); ctx.setLineDash([]);
 
-    // ── Nakshatra band highlight on Moon orbit ring (lunar time only: speedIdx <= 2)
     if (speedIdx <= 2) {
       const moonSidNak = getSiderealAngle('moon', days);
       const nakNow = getNakshatra(moonSidNak);
-      const nakSpan = nakNow.span; // degrees
-      // Start of current nakshatra in sidereal degrees
+      const nakSpan = nakNow.span;
       const nakStart = nakNow.isAbhijit
-        ? ABHIJIT_START
-        : Math.floor(moonSidNak / nakSpan) * nakSpan;
+        ? ABHIJIT_START : Math.floor(moonSidNak / nakSpan) * nakSpan;
       const nakEnd = nakStart + nakSpan;
       const na1 = (nakStart - 90) * DEG;
       const na2 = (nakEnd   - 90) * DEG;
@@ -1606,133 +1307,80 @@ function drawWatch(days) {
       const nr = parseInt(hex2.slice(0,2),16);
       const ng = parseInt(hex2.slice(2,4),16);
       const nb = parseInt(hex2.slice(4,6),16);
-
-      // Highlighted arc on Moon orbit ring
       ctx.beginPath();
-      ctx.arc(CX, CY, R_MOON - 3, na1, na2);
-      ctx.arc(CX, CY, R_MOON + 3, na2, na1, true);
+      ctx.arc(CX, CY, R_MOON-3, na1, na2);
+      ctx.arc(CX, CY, R_MOON+3, na2, na1, true);
       ctx.closePath();
-      ctx.fillStyle = `rgba(${nr},${ng},${nb},0.18)`;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(CX, CY, R_MOON, na1, na2);
-      ctx.strokeStyle = `rgba(${nr},${ng},${nb},0.7)`;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Nakshatra name label on the arc
-      const nakMidAngle = ((nakStart + nakEnd) / 2 - 90) * DEG;
+      ctx.fillStyle = `rgba(${nr},${ng},${nb},0.18)`; ctx.fill();
+      ctx.beginPath(); ctx.arc(CX, CY, R_MOON, na1, na2);
+      ctx.strokeStyle = `rgba(${nr},${ng},${nb},0.7)`; ctx.lineWidth = 2; ctx.stroke();
+      const nakMidAngle = ((nakStart+nakEnd)/2 - 90) * DEG;
       ctx.save();
-      ctx.translate(
-        CX + (R_MOON + 12) * Math.cos(nakMidAngle),
-        CY + (R_MOON + 12) * Math.sin(nakMidAngle)
-      );
-      ctx.rotate(nakMidAngle + Math.PI / 2);
+      ctx.translate(CX + (R_MOON+12)*Math.cos(nakMidAngle), CY + (R_MOON+12)*Math.sin(nakMidAngle));
+      ctx.rotate(nakMidAngle + Math.PI/2);
       ctx.font = 'bold 8px Cinzel, serif';
       ctx.fillStyle = `rgba(${nr},${ng},${nb},0.9)`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      // Short name only
-      const shortName = nakNow.name.replace(' ✦','').split(' ')[0];
-      ctx.fillText(shortName, 0, 0);
-      ctx.restore();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(nakNow.name.replace(' ✦','').split(' ')[0], 0, 0); ctx.restore();
     }
   }
 
-  // ── Retrograde stamps + trails (geocentric only)
+  // Retrograde stamps + trails (geocentric only)
   if (!helioMode) {
-
-  // Stamps only at 1 wk/s and above — accumulate too slowly to matter at lower speeds
-  if (speedIdx >= 4) {
-
-  // Venus pentagram -- connect consecutive SR stamps across face interior
-  // SR stamps mark where Venus stopped: 5 SR stations per 8-yr cycle form the pentagram
-  {
-    const dimVenus = selectedPlanet !== null && selectedPlanet !== 'venus';
-    const vSR = stamps.venus.filter(s => s.type === 'SR');
-    if (vSR.length >= 2) {
-      ctx.save();
-      ctx.globalAlpha = dimVenus ? 0.05 : 0.35;
-      ctx.strokeStyle = COL.venus;
-      ctx.lineWidth = 0.8;
-      ctx.setLineDash([3, 4]);
-      for (let i = 1; i < vSR.length; i++) {
-        const p0 = toCanvas(vSR[i-1].angle, ORBITS.venus * 0.55);
-        const p1 = toCanvas(vSR[i].angle,   ORBITS.venus * 0.55);
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
-        ctx.stroke();
+    if (speedIdx >= 4) {
+      // Venus pentagram
+      {
+        const dimVenus = selectedPlanet !== null && selectedPlanet !== 'venus';
+        const vSR = stamps.venus.filter(s => s.type === 'SR');
+        if (vSR.length >= 2) {
+          ctx.save(); ctx.globalAlpha = dimVenus ? 0.05 : 0.35;
+          ctx.strokeStyle = COL.venus; ctx.lineWidth = 0.8; ctx.setLineDash([3,4]);
+          for (let i = 1; i < vSR.length; i++) {
+            const p0 = toCanvas(vSR[i-1].angle, ORBITS.venus*0.55);
+            const p1 = toCanvas(vSR[i].angle,   ORBITS.venus*0.55);
+            ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+          }
+          ctx.setLineDash([]); ctx.restore();
+        }
       }
-      ctx.setLineDash([]);
-      ctx.restore();
+
+      const stampBodies = ['mercury','venus','mars','jupiter','saturn'];
+      stampBodies.forEach(b => {
+        if (stamps[b].length === 0) return;
+        const dimmed = selectedPlanet !== null && selectedPlanet !== b;
+        const r = ORBITS[b];
+        const hex = COL[b].replace('#','');
+        const cr = parseInt(hex.slice(0,2),16);
+        const cg = parseInt(hex.slice(2,4),16);
+        const cb = parseInt(hex.slice(4,6),16);
+        stamps[b].forEach((s, idx) => {
+          const age = stamps[b].length - 1 - idx;
+          const ageFrac = age / Math.max(stamps[b].length-1, 1);
+          const isSR = s.type === 'SR';
+          const baseAlpha = isSR ? 0.90 : 0.55;
+          const alpha = (1 - ageFrac*0.65) * (dimmed ? 0.07 : baseAlpha);
+          const p = toCanvas(s.angle, r);
+          ctx.save(); ctx.globalAlpha = alpha;
+          ctx.translate(p.x, p.y); ctx.rotate((s.angle-90)*DEG);
+          const h = isSR ? 5 : 3.5; const w = isSR ? 2.5 : 2.0;
+          ctx.beginPath(); ctx.moveTo(0,-h); ctx.lineTo(w,0); ctx.lineTo(0,h); ctx.lineTo(-w,0);
+          ctx.closePath();
+          if (isSR) { ctx.fillStyle=`rgba(${cr},${cg},${cb},1)`; ctx.fill(); }
+          else { ctx.strokeStyle=`rgba(${cr},${cg},${cb},1)`; ctx.lineWidth=1; ctx.stroke(); }
+          if (b === 'mercury' && !dimmed && stamps[b].length <= 40) {
+            ctx.font = '6.5px Cinzel, serif';
+            ctx.fillStyle = `rgba(${cr},${cg},${cb},0.85)`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.rotate(-(s.angle-90)*DEG);
+            ctx.fillText(isSR ? 'SR' : 'SD', 0, isSR ? -10 : -9);
+          }
+          ctx.restore();
+        });
+      });
     }
   }
 
-  // All planets: SR = filled diamond (petal tip), SD = open diamond (petal base)
-  // Paper 11.2: SR and SD are Ketu zero-crossing moments — d(lambda)/dt = 0
-  // Paper 11.3: "each petal tip is a SR; each petal base is a SD"
-  const stampBodies = ['mercury','venus','mars','jupiter','saturn'];
-  stampBodies.forEach(b => {
-    if (stamps[b].length === 0) return;
-    const dimmed = selectedPlanet !== null && selectedPlanet !== b;
-    const r = ORBITS[b];
-    const hex = COL[b].replace('#','');
-    const cr = parseInt(hex.slice(0,2),16);
-    const cg = parseInt(hex.slice(2,4),16);
-    const cb = parseInt(hex.slice(4,6),16);
-
-    stamps[b].forEach((s, idx) => {
-      const age = stamps[b].length - 1 - idx;
-      const ageFrac = age / Math.max(stamps[b].length - 1, 1);
-      const isSR = s.type === 'SR';
-      const baseAlpha = isSR ? 0.90 : 0.55;
-      const alpha = (1 - ageFrac * 0.65) * (dimmed ? 0.07 : baseAlpha);
-
-      const p = toCanvas(s.angle, r);
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(p.x, p.y);
-      ctx.rotate((s.angle - 90) * DEG);
-
-      // SR: filled diamond (bright petal tip); SD: open diamond (dim petal base)
-      const h = isSR ? 5 : 3.5;
-      const w = isSR ? 2.5 : 2.0;
-      ctx.beginPath();
-      ctx.moveTo(0, -h);
-      ctx.lineTo(w, 0);
-      ctx.lineTo(0, h);
-      ctx.lineTo(-w, 0);
-      ctx.closePath();
-      if (isSR) {
-        ctx.fillStyle = `rgba(${cr},${cg},${cb},1)`;
-        ctx.fill();
-      } else {
-        ctx.strokeStyle = `rgba(${cr},${cg},${cb},1)`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      // Mercury: label each stamp SR or SD while rosette builds
-      if (b === 'mercury' && !dimmed && stamps[b].length <= 40) {
-        ctx.font = '6.5px Cinzel, serif';
-        ctx.fillStyle = `rgba(${cr},${cg},${cb},0.85)`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.rotate(-(s.angle - 90) * DEG);
-        ctx.fillText(isSR ? 'SR' : 'SD', 0, isSR ? -10 : -9);
-      }
-
-      ctx.restore();
-    });
-  });
-
-  } // end speedIdx >= 4 (stamps)
-  } // end !helioMode (stamps)
-
-  // ── Mercury rosette (persistent accumulation, paper §11.3)
-  // Draws all accumulated petals: retrograde arcs in ketu-pink (petal body),
-  // direct arcs faint (connectors between petals). SR/SD stamps mark tips/bases.
+  // Mercury rosette
   if (!helioMode && rosetteMode && mercuryRosette.length >= 2) {
     const dimmed = selectedPlanet !== null && selectedPlanet !== 'mercury';
     const r = ORBITS.mercury;
@@ -1745,63 +1393,50 @@ function drawWatch(days) {
       const p0 = toCanvas(mercuryRosette[i-1].angle, r);
       const p1 = toCanvas(mercuryRosette[i].angle, r);
       const isR = mercuryRosette[i].retro;
-      // Age fade: older petals slightly dimmer so newest petal stands out
       const ageFrac = i / total;
       const baseA = 0.15 + ageFrac * 0.55;
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
       if (isR) {
-        // Retrograde arc = petal body — ketu-pink, brighter
-        ctx.strokeStyle = `rgba(220,80,120,${dimmed ? 0.05 : baseA * 1.3})`;
+        ctx.strokeStyle = `rgba(220,80,120,${dimmed ? 0.05 : baseA*1.3})`;
         ctx.lineWidth = dimmed ? 0.5 : 1.8;
       } else {
-        // Direct arc = inter-petal connector — planet color, faint
-        ctx.strokeStyle = `rgba(${cr},${cg},${cb},${dimmed ? 0.03 : baseA * 0.35})`;
+        ctx.strokeStyle = `rgba(${cr},${cg},${cb},${dimmed ? 0.03 : baseA*0.35})`;
         ctx.lineWidth = dimmed ? 0.3 : 0.8;
       }
       ctx.stroke();
     }
   }
 
-  // ── Planetary trails (geocentric only, 1 day/s and above)
+  // Planetary trails (geocentric, speedIdx >= 3)
   if (!helioMode && speedIdx >= 3) {
-  Object.keys(trails).forEach(b => {
-    const tr = trails[b];
-    if (tr.length < 2) return;
-    const r = ORBITS[b];
-    const dimmed = selectedPlanet !== null && selectedPlanet !== b;
-    const baseAlphaScale = dimmed ? 0.08 : 1.0;
-    // Parse planet color to rgb for trail
-    const hex = COL[b].replace('#','');
-    const cr = parseInt(hex.slice(0,2),16);
-    const cg = parseInt(hex.slice(2,4),16);
-    const cb = parseInt(hex.slice(4,6),16);
-
-    for (let i = 1; i < tr.length; i++) {
-      const frac = i / tr.length;
-      const alpha = frac * 0.65 * baseAlphaScale;
-      const p0 = toCanvas(tr[i-1].angle, r);
-      const p1 = toCanvas(tr[i].angle, r);
-      const isR = tr[i].retro;
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      if (isR) {
-        // Retrograde: bright ketu-pink tinted with planet color
-        ctx.strokeStyle = `rgba(220,80,120,${alpha * 1.4})`;
-        ctx.lineWidth = dimmed ? 0.5 : 2;
-      } else {
-        // Direct: planet's own color, softer
-        ctx.strokeStyle = `rgba(${cr},${cg},${cb},${alpha * 0.7})`;
-        ctx.lineWidth = dimmed ? 0.4 : 1;
+    Object.keys(trails).forEach(b => {
+      const tr = trails[b];
+      if (tr.length < 2) return;
+      const r = ORBITS[b];
+      const dimmed = selectedPlanet !== null && selectedPlanet !== b;
+      const baseAlphaScale = dimmed ? 0.08 : 1.0;
+      const hex = COL[b].replace('#','');
+      const cr = parseInt(hex.slice(0,2),16);
+      const cg = parseInt(hex.slice(2,4),16);
+      const cb = parseInt(hex.slice(4,6),16);
+      for (let i = 1; i < tr.length; i++) {
+        const frac = i / tr.length;
+        const alpha = frac * 0.65 * baseAlphaScale;
+        const p0 = toCanvas(tr[i-1].angle, r);
+        const p1 = toCanvas(tr[i].angle, r);
+        const isR = tr[i].retro;
+        ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+        if (isR) {
+          ctx.strokeStyle = `rgba(220,80,120,${alpha*1.4})`; ctx.lineWidth = dimmed ? 0.5 : 2;
+        } else {
+          ctx.strokeStyle = `rgba(${cr},${cg},${cb},${alpha*0.7})`; ctx.lineWidth = dimmed ? 0.4 : 1;
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
-    }
-  });
-  } // end !helioMode (trails)
+    });
+  }
 
-  // ── Conjunction glows — pairs within 5° (geocentric, medium speeds only)
+  // Conjunction glows
   if (!helioMode && speedIdx <= 5) {
     const cBodies = ['moon','mercury','venus','sun','mars','jupiter','saturn'];
     for (let i = 0; i < cBodies.length; i++) {
@@ -1814,7 +1449,7 @@ function drawWatch(days) {
           const p1 = toCanvas(a1, ORBITS[cBodies[i]]);
           const p2 = toCanvas(a2, ORBITS[cBodies[j]]);
           const midX = (p1.x+p2.x)/2, midY = (p1.y+p2.y)/2;
-          const alpha = (1 - sep/6) * 0.4;
+          const alpha = (1-sep/6) * 0.4;
           const cg = ctx.createRadialGradient(midX,midY,0,midX,midY,30);
           cg.addColorStop(0, `rgba(255,240,160,${alpha})`);
           cg.addColorStop(1, 'rgba(255,240,160,0)');
@@ -1825,54 +1460,36 @@ function drawWatch(days) {
     }
   }
 
-  // ── Planets + labels
+  // Planets + labels
   const geoList  = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
   const helioList = ['saturn','jupiter','mars','earth','venus','mercury'];
   const planetList = helioMode ? helioList : geoList;
 
   planetList.forEach(b => {
-    // Position
     const angle = helioMode ? getHelioAngle(b, days) : displayAngle(b, days);
     const r     = helioMode ? HELIO_ORBITS[b] : ORBITS[b];
     const p     = toCanvas(angle, r);
-
-    // Apparent size — scale by inverse distance from Earth
     let szBase = SIZES[b] || 4;
     if (!helioMode && b !== 'moon' && b !== 'sun' && b !== 'rahu') {
       const dist = getDistance(b, days);
-      // Normalise: Venus ranges 0.27–1.73 AU, Mars 0.37–2.67 AU
       const refDist = { mercury:0.6, venus:0.72, mars:1.0, jupiter:5.0, saturn:9.0 };
       const ref = refDist[b] || 1.0;
       const scale = Math.sqrt(ref / Math.max(dist, 0.1));
-      szBase = Math.max(2, Math.min(szBase * scale, szBase * 2.5));
+      szBase = Math.max(2, Math.min(szBase*scale, szBase*2.5));
     }
     const sz = szBase;
-
     const dimmed      = selectedPlanet !== null && selectedPlanet !== b;
     const highlighted = selectedPlanet === b;
     const globalAlpha = dimmed ? 0.2 : 1.0;
     const col = b === 'earth' ? '#4A90D9' : COL[b];
-
-    ctx.save();
-    ctx.globalAlpha = globalAlpha;
-
-    // Glow
+    ctx.save(); ctx.globalAlpha = globalAlpha;
     const glowR = highlighted ? sz*5 : sz*3;
     const glow  = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,glowR);
     glow.addColorStop(0, col+(highlighted?'DD':'AA'));
     glow.addColorStop(1, col+'00');
-    ctx.beginPath(); ctx.arc(p.x,p.y,glowR,0,TWO_PI);
-    ctx.fillStyle = glow; ctx.fill();
-
-    // Planet dot or Earth mini sphere
-    if (b === 'earth') {
-      drawEarth(p.x, p.y, sz);
-    } else {
-      ctx.beginPath(); ctx.arc(p.x,p.y,sz,0,TWO_PI);
-      ctx.fillStyle = col; ctx.fill();
-    }
-
-    // ── Phase shading for Mercury and Venus (inferior planets, geocentric only)
+    ctx.beginPath(); ctx.arc(p.x,p.y,glowR,0,TWO_PI); ctx.fillStyle=glow; ctx.fill();
+    if (b === 'earth') { drawEarth(p.x, p.y, sz); }
+    else { ctx.beginPath(); ctx.arc(p.x,p.y,sz,0,TWO_PI); ctx.fillStyle=col; ctx.fill(); }
     if (!helioMode && (b === 'mercury' || b === 'venus')) {
       const phaseAngle = getPhaseAngle(b, days);
       const illum = (1 + Math.cos(phaseAngle)) / 2;
@@ -1880,88 +1497,58 @@ function drawWatch(days) {
         const sunAngle = displayAngle('sun', days);
         const pAngle   = displayAngle(b, days);
         let   diff     = sunAngle - pAngle;
-        if (diff > 180) diff -= 360;
-        if (diff < -180) diff += 360;
-        const shadowDir = (pAngle - 90) * DEG + (diff > 0 ? 0 : Math.PI);
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(shadowDir);
-        const darkAlpha = (1 - illum) * 0.75;
-        // Terminator radius: positive always; flip arc direction based on phase
-        const terminatorR = Math.abs(sz * (2 * illum - 1));
-        const fullCircle = illum < 0.5;  // dark side is majority
+        if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+        const shadowDir = (pAngle-90)*DEG + (diff > 0 ? 0 : Math.PI);
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(shadowDir);
+        const darkAlpha = (1-illum)*0.75;
+        const terminatorR = Math.abs(sz*(2*illum-1));
+        const fullCircle = illum < 0.5;
         ctx.beginPath();
         if (fullCircle) {
-          // More than half dark: draw the lit crescent
           ctx.arc(0, 0, sz, -Math.PI/2, Math.PI/2, false);
           ctx.arc(0, 0, Math.max(0.1, terminatorR), Math.PI/2, -Math.PI/2, false);
         } else {
-          // Less than half dark: draw the dark crescent
           ctx.arc(0, 0, sz, -Math.PI/2, Math.PI/2, false);
           ctx.arc(0, 0, Math.max(0.1, terminatorR), Math.PI/2, -Math.PI/2, true);
         }
-        ctx.closePath();
-        ctx.fillStyle = `rgba(0,0,0,${darkAlpha})`;
-        ctx.fill();
-        ctx.restore();
+        ctx.closePath(); ctx.fillStyle=`rgba(0,0,0,${darkAlpha})`; ctx.fill(); ctx.restore();
       }
     }
-
-    // Highlight ring
     if (highlighted) {
       ctx.beginPath(); ctx.arc(p.x,p.y,sz+5,0,TWO_PI);
-      ctx.strokeStyle = col+'CC';
-      ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.strokeStyle=col+'CC'; ctx.lineWidth=1.5; ctx.stroke();
     }
-
-    // Retrograde ring (geocentric only)
     if (!helioMode) {
       const retro = isRetrograde(b, days);
       if (retro) {
         ctx.beginPath(); ctx.arc(p.x,p.y,sz+3.5,0,TWO_PI);
-        ctx.strokeStyle = 'rgba(201,76,106,0.8)';
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle='rgba(201,76,106,0.8)'; ctx.lineWidth=1.2;
         ctx.setLineDash([2,3]); ctx.stroke(); ctx.setLineDash([]);
       }
     }
-
-    // Saturn ring
     if (b === 'saturn') {
-      ctx.save();
-      ctx.translate(p.x,p.y); ctx.rotate(20*DEG); ctx.scale(1,0.4);
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(20*DEG); ctx.scale(1,0.4);
       ctx.beginPath(); ctx.arc(0,0,sz*2.2,0,TWO_PI);
-      ctx.strokeStyle = COL.saturn+'80'; ctx.lineWidth=1.5; ctx.stroke();
-      ctx.restore();
+      ctx.strokeStyle=COL.saturn+'80'; ctx.lineWidth=1.5; ctx.stroke(); ctx.restore();
     }
-
     ctx.restore();
-
-    // Label
     const labelAlpha = dimmed ? 0.15 : (highlighted ? 1.0 : 0.75);
     const labelAngle = (angle-90)*DEG;
     const labelR     = r + sz + 11;
     const lx = CX + labelR*Math.cos(labelAngle);
     const ly = CY + labelR*Math.sin(labelAngle);
-    const lbl = b === 'earth'
-      ? { sym: '⊕', name: 'Earth' }
-      : (LABELS[b] || { sym: b[0].toUpperCase(), name: b });
-    ctx.save();
-    ctx.globalAlpha = labelAlpha;
+    const lbl = b === 'earth' ? { sym:'⊕', name:'Earth' } : (LABELS[b] || { sym:b[0].toUpperCase(), name:b });
+    ctx.save(); ctx.globalAlpha = labelAlpha;
     ctx.font = `${highlighted?'bold ':''}10px Cinzel, serif`;
-    ctx.fillStyle = col;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = col; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(highlighted ? `${lbl.sym} ${lbl.name}` : lbl.sym, lx, ly);
     ctx.restore();
   });
 
-  // ── Centre body — Earth (geocentric) or Sun (heliocentric)
-  if (helioMode) {
-    drawSun(CX, CY, 18);
-  } else {
-    drawEarth(CX, CY, 18);
-  }
+  // Centre body
+  if (helioMode) { drawSun(CX, CY, 18); } else { drawEarth(CX, CY, 18); }
 
-  // ── Filigree tick marks
+  // Tick marks
   for (let t = 0; t < 360; t += 6) {
     const isSign = t % 30 === 0;
     const isMajor = t % 10 === 0;
@@ -1969,41 +1556,33 @@ function drawWatch(days) {
     const inner = ZODIAC_INNER;
     const rad = (t - 90) * DEG;
     ctx.beginPath();
-    ctx.moveTo(CX + (inner - len) * Math.cos(rad), CY + (inner - len) * Math.sin(rad));
-    ctx.lineTo(CX + inner * Math.cos(rad), CY + inner * Math.sin(rad));
+    ctx.moveTo(CX+(inner-len)*Math.cos(rad), CY+(inner-len)*Math.sin(rad));
+    ctx.lineTo(CX+inner*Math.cos(rad), CY+inner*Math.sin(rad));
     ctx.strokeStyle = isSign ? 'rgba(201,168,76,0.7)' : 'rgba(201,168,76,0.25)';
-    ctx.lineWidth = isSign ? 1.5 : 0.8;
-    ctx.stroke();
+    ctx.lineWidth = isSign ? 1.5 : 0.8; ctx.stroke();
   }
 
-  // ── Moon nakshatra arc — only at 1 day/s or slower (meaningless at higher speeds)
+  // Moon nakshatra arc
   if (speedIdx <= 3) {
     const moonSidNow = getSiderealAngle('moon', days);
     const nakNow = getNakshatra(moonSidNow);
     const R_NAK = R_FACE * 0.795;
     ctx.beginPath();
-    ctx.arc(CX, CY, R_NAK, -Math.PI/2, -Math.PI/2 + nakNow.frac * TWO_PI);
-    ctx.strokeStyle = (DASHA_COLORS[nakNow.lord] || '#C9A84C') + 'CC';
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    ctx.arc(CX, CY, R_NAK, -Math.PI/2, -Math.PI/2 + nakNow.frac*TWO_PI);
+    ctx.strokeStyle = (DASHA_COLORS[nakNow.lord]||'#C9A84C')+'CC';
+    ctx.lineWidth = 3; ctx.stroke();
   }
 
-  // ── Label: current year + mode indicator
+  // Year label + mode banner
   const jd = J2000_JD + days;
   const dateStr = jdToDate(jd).split(' ');
-  ctx.font = '700 11px Cinzel, serif';
-  ctx.fillStyle = 'rgba(201,168,76,0.4)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.font = '700 11px Cinzel, serif'; ctx.fillStyle = 'rgba(201,168,76,0.4)';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(dateStr[2], CX, CY + 30);
-
-  // Heliocentric mode banner
   if (helioMode) {
-    ctx.font = '9px Cinzel, serif';
-    ctx.fillStyle = 'rgba(255,200,60,0.55)';
+    ctx.font = '9px Cinzel, serif'; ctx.fillStyle = 'rgba(255,200,60,0.55)';
     ctx.fillText('HELIOCENTRIC', CX, CY + 46);
-    ctx.font = '8px EB Garamond, serif';
-    ctx.fillStyle = 'rgba(201,76,106,0.45)';
+    ctx.font = '8px EB Garamond, serif'; ctx.fillStyle = 'rgba(201,76,106,0.45)';
     ctx.fillText('retrograde is a geocentric phenomenon', CX, CY + 59);
   }
 }
@@ -2017,35 +1596,30 @@ function updateUI(days) {
   document.getElementById('epochDisp').textContent = jdToDate(jd);
   document.getElementById('jdDisp').textContent = `JD ${jd.toFixed(1)}`;
 
-  // ── Live Sky Panel — show fully at slow speeds, name-only at 1 day/s, hide above
   const nakPanel = document.getElementById('liveNakPanel');
   const nakSlowContent = document.getElementById('nakSlowContent');
   const nakFastNote = document.getElementById('nakFastNote');
-
   const moonSid = getSiderealAngle('moon', days);
   const nak = getNakshatra(moonSid);
   const nakChanged = nak.name !== _lastNakName || Math.abs(nak.frac - _lastNakFrac) > 0.005;
 
   if (speedIdx <= 2) {
-    // Full nakshatra mode — show everything
     if (nakSlowContent) nakSlowContent.style.display = 'block';
     if (nakFastNote) nakFastNote.style.display = 'none';
     if (nakChanged) {
       _lastNakName = nak.name; _lastNakFrac = nak.frac;
-      // Check if this is an anchor nakshatra (Note 13)
       const nakBaseName = nak.name.replace(' ✦','');
       const anchor = ANCHOR_NAKSHATRAS[nakBaseName];
       const anchorFlag = anchor
         ? `<div style="margin-top:6px;padding:4px 8px;border:1px solid ${anchor.color}33;border-left:2px solid ${anchor.color};background:${anchor.color}11;border-radius:2px;">
              <span style="font-family:'Cinzel',serif;font-size:9px;color:${anchor.color};letter-spacing:0.15em;text-transform:uppercase;">⬡ Galactic Anchor</span>
              <div style="font-size:10px;color:${anchor.color}CC;margin-top:2px;font-style:italic;">${anchor.galactic} · ${anchor.star}</div>
-           </div>`
-        : '';
+           </div>` : '';
       document.getElementById('liveNakDisp').innerHTML =
         `<span style="color:${DASHA_COLORS[nak.lord]}">${nak.name}</span>${anchorFlag}`;
       document.getElementById('liveLordDisp').textContent =
-        `Lord: ${nak.lord} · ${(nak.frac * 100).toFixed(1)}% through`;
-      document.getElementById('liveFracFill').style.width = (nak.frac * 100).toFixed(1) + '%';
+        `Lord: ${nak.lord} · ${(nak.frac*100).toFixed(1)}% through`;
+      document.getElementById('liveFracFill').style.width = (nak.frac*100).toFixed(1) + '%';
       document.getElementById('liveFracFill').style.background = DASHA_COLORS[nak.lord];
       const liveVimsho = getVimshottari(moonSid, 0);
       if (liveVimsho) {
@@ -2053,11 +1627,10 @@ function updateUI(days) {
           `MD: <span style="color:${DASHA_COLORS[liveVimsho.md]};font-family:'Cinzel',serif">${liveVimsho.md}</span> ` +
           `<em style="color:var(--dim)">${(liveVimsho.mdRemaining).toFixed(2)} yr rem</em><br>` +
           `AD: <span style="color:${DASHA_COLORS[liveVimsho.ad]};font-family:'Cinzel',serif">${liveVimsho.ad}</span> ` +
-          `<em style="color:var(--dim)">${(liveVimsho.adRemaining * 12).toFixed(1)} mo rem</em>`;
+          `<em style="color:var(--dim)">${(liveVimsho.adRemaining*12).toFixed(1)} mo rem</em>`;
       }
     }
   } else if (speedIdx === 3) {
-    // 1 day/s — show nakshatra name only, no fraction/dasha
     if (nakSlowContent) nakSlowContent.style.display = 'none';
     if (nakFastNote) nakFastNote.style.display = 'none';
     if (nakChanged) {
@@ -2065,14 +1638,12 @@ function updateUI(days) {
       const nakBaseName = nak.name.replace(' ✦','');
       const anchor = ANCHOR_NAKSHATRAS[nakBaseName];
       const anchorMark = anchor
-        ? ` <span style="color:${anchor.color};font-size:9px;" title="${anchor.galactic}">⬡</span>`
-        : '';
+        ? ` <span style="color:${anchor.color};font-size:9px;" title="${anchor.galactic}">⬡</span>` : '';
       document.getElementById('liveNakDisp').innerHTML =
         `<span style="color:${DASHA_COLORS[nak.lord]}">${nak.name}</span>${anchorMark} ` +
         `<em style="color:var(--dim);font-size:10px;">· ${nak.lord}</em>`;
     }
   } else {
-    // Above 1 day/s — dim the panel, show advisory
     if (nakSlowContent) nakSlowContent.style.display = 'none';
     if (nakFastNote) nakFastNote.style.display = 'block';
     document.getElementById('liveNakDisp').innerHTML =
@@ -2080,13 +1651,13 @@ function updateUI(days) {
   }
 
   const bodies2 = [
-    { key: 'moon',    label: '☽ Moon' },
-    { key: 'mercury', label: '☿ Mercury' },
-    { key: 'venus',   label: '♀ Venus' },
-    { key: 'sun',     label: '☉ Sun' },
-    { key: 'mars',    label: '♂ Mars' },
-    { key: 'jupiter', label: '♃ Jupiter' },
-    { key: 'saturn',  label: '♄ Saturn' },
+    { key:'moon',    label:'☽ Moon' },
+    { key:'mercury', label:'☿ Mercury' },
+    { key:'venus',   label:'♀ Venus' },
+    { key:'sun',     label:'☉ Sun' },
+    { key:'mars',    label:'♂ Mars' },
+    { key:'jupiter', label:'♃ Jupiter' },
+    { key:'saturn',  label:'♄ Saturn' },
   ];
   const tbl = document.getElementById('planetTable');
   const ay = ayanamsha(days);
@@ -2094,13 +1665,10 @@ function updateUI(days) {
     const a = displayAngle(b.key, days);
     const retro = isRetrograde(b.key, days);
     const rxBadge = retro
-      ? `<span style="color:#C94C6A;font-family:'Cinzel',serif;font-size:10px;margin-left:4px" title="Retrograde — Ketu moment">℞</span>`
-      : '';
-    // Abhijit badge for Moon
-    const moonSid = getSiderealAngle('moon', days);
-    const abhijitBadge = (b.key === 'moon' && isInAbhijit(moonSid))
-      ? `<span style="color:#F5E5A0;font-family:'Cinzel',serif;font-size:9px;margin-left:4px" title="Moon in Abhijit — correction node active">✦</span>`
-      : '';
+      ? `<span style="color:#C94C6A;font-family:'Cinzel',serif;font-size:10px;margin-left:4px" title="Retrograde">℞</span>` : '';
+    const moonSid2 = getSiderealAngle('moon', days);
+    const abhijitBadge = (b.key === 'moon' && isInAbhijit(moonSid2))
+      ? `<span style="color:#F5E5A0;font-family:'Cinzel',serif;font-size:9px;margin-left:4px" title="Moon in Abhijit">✦</span>` : '';
     return `<div class="planet-row">
       <span class="planet-dot" style="background:${COL[b.key]}"></span>
       <span class="planet-name">${b.label}${rxBadge}${abhijitBadge}</span>
@@ -2109,27 +1677,23 @@ function updateUI(days) {
     </div>`;
   }).join('');
 
-  // Ayanamsha display
   const ayEl = document.getElementById('ayanamshaDisp');
   if (ayEl) {
     ayEl.textContent = `Lahiri ayanamsha: ${ay.toFixed(4)}°`;
-    // Check Abhijit
-    const moonSid2 = getSiderealAngle('moon', days);
+    const moonSid3 = getSiderealAngle('moon', days);
     const abhEl = document.getElementById('abhijitDisp');
     if (abhEl) {
-      if (isInAbhijit(moonSid2)) {
-        abhEl.innerHTML = `<span style="color:#F5E5A0">✦ Moon in Abhijit (${moonSid2.toFixed(3)}°)</span><br><span style="font-style:italic">Correction node active — dasha balance uses 4.222° span (Note 1)</span>`;
+      if (isInAbhijit(moonSid3)) {
+        abhEl.innerHTML = `<span style="color:#F5E5A0">✦ Moon in Abhijit (${moonSid3.toFixed(3)}°)</span><br>` +
+          `<span style="font-style:italic">Correction node active — dasha balance uses 4.222° span (Note 1)</span>`;
       } else {
-        abhEl.textContent = `Moon at ${moonSid2.toFixed(2)}° sidereal`;
+        abhEl.textContent = `Moon at ${moonSid3.toFixed(2)}° sidereal`;
       }
     }
   }
 
-  // Nodal
   const ra = displayAngle('rahu', days);
   const ka = (ra + 180) % 360;
-
-  // Nakshatra for each node (always sidereal)
   const raSid = getSiderealAngle('rahu', days);
   const kaSid = (raSid + 180) % 360;
   const raNak = getNakshatra(raSid);
@@ -2145,11 +1709,10 @@ function updateUI(days) {
     `<em style="color:var(--dim)">${signOf(ka).split(' ')[1]}</em> ` +
     `<span style="color:${DASHA_COLORS[kaNak.lord]};font-size:11px;">${kaNak.name}${kaAnchor ? ' <span style="color:'+kaAnchor.color+'">⬡</span>' : ''}</span>`;
 
-  // Axis alignment to GC-GAC
   const alignDeg = nodalAxisAlignment(raSid);
   const alignFrac = 1 - alignDeg / 90;
   const alignColor = alignDeg < 12 ? '#4CA8C9' : alignDeg < 30 ? '#C9A84C' : '#5A4820';
-  const alignBarW = ((1 - alignDeg / 90) * 100).toFixed(1);
+  const alignBarW = ((1-alignDeg/90)*100).toFixed(1);
   document.getElementById('axisAlignDisp').innerHTML =
     `<div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:0.2em;color:var(--dim);text-transform:uppercase;margin-bottom:5px;">Axis → GC-GAC</div>` +
     `<div style="display:flex;align-items:center;gap:8px;">` +
@@ -2162,31 +1725,26 @@ function updateUI(days) {
     `${alignDeg < 5 ? '★ Near-alignment — axis approaching GC-GAC' : alignDeg < 12 ? '↑ Approaching galactic axis' : '0° = Rahu-Ketu axis aligns with GC-GAC'}` +
     `</div>`;
 
-  // Galactic Phase card (Note 17)
   const wsDev = wsDeviationFromGC(days);
   const inWindow2deg = wsDev < 2.0;
   const inWindow1deg = wsDev < 1.0;
-  // Days to prediction window
   const daysToWindow = PRED_WINDOW_START - days;
   const daysToPeak   = PRED_WINDOW_PEAK  - days;
-  const daysToEnd    = PRED_WINDOW_END   - days;
   const inPredWindow = days >= PRED_WINDOW_START && days <= PRED_WINDOW_END;
   const pastWindow   = days > PRED_WINDOW_END;
-
   let countdownStr;
   if (inPredWindow) {
     countdownStr = `<span style="color:#C94C6A;font-family:'Cinzel',serif;font-size:12px;">★ ACTIVE — Rahu in Mula window</span>`;
   } else if (pastWindow) {
     countdownStr = `<span style="color:var(--dim);font-size:11px;">Window passed</span>`;
   } else {
-    const yrs = (daysToWindow / 365.25).toFixed(1);
-    const peakYrs = (daysToPeak / 365.25).toFixed(1);
+    const yrs = (daysToWindow/365.25).toFixed(1);
+    const peakYrs = (daysToPeak/365.25).toFixed(1);
     countdownStr =
       `<span style="font-family:'Cinzel',serif;font-size:12px;color:#C94C6A;">${yrs} yr</span>` +
       `<span style="font-size:10px;color:var(--dim);"> to window open</span><br>` +
       `<span style="font-size:10px;color:var(--dim);">Peak (Rahu deepest in Mula): ${peakYrs} yr</span>`;
   }
-
   document.getElementById('galacticPhaseDisp').innerHTML =
     `<div style="margin-bottom:8px;">` +
     `  <div style="font-size:10px;color:var(--dim);margin-bottom:3px;">WS deviation from Sgr A* (243°)</div>` +
@@ -2218,7 +1776,6 @@ function loop(ts) {
   }
   lastTime = ts;
 
-  // ── Update trails: sample every TRAIL_STEP sim-days
   if (lastTrailDay === null) lastTrailDay = simDays;
   const dayDiff = simDays - lastTrailDay;
   if (Math.abs(dayDiff) >= TRAIL_STEP || lastTrailDay === simDays) {
@@ -2232,7 +1789,6 @@ function loop(ts) {
         if (trails[b].length > TRAIL_LEN) trails[b].shift();
         updateStamps(b, d);
       });
-      // Rosette accumulator — Mercury only, persistent (no length cap)
       if (rosetteMode) {
         const angle = displayAngle('mercury', d);
         const retro = isRetrograde('mercury', d);
@@ -2243,12 +1799,7 @@ function loop(ts) {
   }
 
   drawWatch(simDays);
-  // Throttle panel DOM updates to ~12fps — canvas still draws at 60fps
-  // Prevents layout reflow judder caused by innerHTML writes every frame
-  if (ts - lastUITime >= 80) {
-    updateUI(simDays);
-    lastUITime = ts;
-  }
+  if (ts - lastUITime >= 80) { updateUI(simDays); lastUITime = ts; }
   requestAnimationFrame(loop);
 }
 
@@ -2263,8 +1814,7 @@ function updateSpeedLabel() {
 document.getElementById('speedRange').addEventListener('input', e => {
   speedIdx = parseInt(e.target.value);
   updateSpeedLabel();
-  _lastNakName = '';  // force nakshatra panel redraw on speed change
-  _lastNakFrac = -1;
+  _lastNakName = ''; _lastNakFrac = -1;
 });
 
 document.getElementById('btnPause').addEventListener('click', () => {
@@ -2280,29 +1830,22 @@ document.getElementById('btnPlay').addEventListener('click', () => {
 });
 
 document.getElementById('btnReset').addEventListener('click', () => {
-  simDays = EPOCH_DAYS;
-  playing = false;
-  lastTrailDay = null;
+  simDays = EPOCH_DAYS; playing = false; lastTrailDay = null;
   Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
   Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnPause').classList.add('active');
   document.getElementById('btnPlay').classList.remove('active');
 });
 
-// ── Set to Now — sync sim to browser clock
 document.getElementById('btnSetNow').addEventListener('click', () => {
-  simDays = dateToDays(new Date());
-  playing = false;
-  lastTrailDay = null;
+  simDays = dateToDays(new Date()); playing = false; lastTrailDay = null;
   Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
   Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnPause').classList.add('active');
   document.getElementById('btnPlay').classList.remove('active');
-  drawWatch(simDays);
-  updateUI(simDays);
+  drawWatch(simDays); updateUI(simDays);
 });
 
-// ── Natal Vimshottari calculation
 function fmtRem(years) {
   if (years >= 1) return years.toFixed(2) + ' yr';
   return (years * 12).toFixed(1) + ' mo';
@@ -2312,43 +1855,29 @@ document.getElementById('btnCalcNatal').addEventListener('click', () => {
   const dateVal = document.getElementById('birthDate').value;
   const timeVal = document.getElementById('birthTime').value || '12:00';
   const res = document.getElementById('natalResult');
-
   if (!dateVal) {
     res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Please enter a birth date.</span>';
     return;
   }
-
-  // Parse birth datetime as local time
   const birthDate = new Date(`${dateVal}T${timeVal}:00`);
   if (isNaN(birthDate.getTime())) {
-    res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Invalid date.</span>';
-    return;
+    res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Invalid date.</span>'; return;
   }
-
   const birthDays = dateToDays(birthDate);
   const nowDays   = dateToDays(new Date());
   const elapsedYrs = (nowDays - birthDays) / 365.2564;
-
   if (elapsedYrs < 0) {
-    res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Birth date is in the future.</span>';
-    return;
+    res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Birth date is in the future.</span>'; return;
   }
-
-  // Natal Moon sidereal longitude
   const natalMoonTrop = getMoonLongitude(birthDays);
   const natalMoonSid  = ((natalMoonTrop - ayanamsha(birthDays)) % 360 + 360) % 360;
   const nak = getNakshatra(natalMoonSid);
   const vimsho = getVimshottari(natalMoonSid, elapsedYrs);
-
   if (!vimsho) {
-    res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Calculation error.</span>';
-    return;
+    res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Calculation error.</span>'; return;
   }
-
   const abhijitNote = nak.isAbhijit
-    ? `<div style="color:#F5E5A0;font-size:10px;margin-top:4px;font-style:italic;">✦ Abhijit correction applied — 4.222° span used for balance</div>`
-    : '';
-
+    ? `<div style="color:#F5E5A0;font-size:10px;margin-top:4px;font-style:italic;">✦ Abhijit correction applied — 4.222° span used for balance</div>` : '';
   res.innerHTML = `
     <div style="border-top:1px solid var(--dim);padding-top:10px;margin-top:4px;">
       <div style="font-size:10px;color:var(--dim);margin-bottom:6px;">
@@ -2373,7 +1902,6 @@ document.getElementById('btnCalcNatal').addEventListener('click', () => {
     </div>`;
 });
 
-// ── Canvas click: select/deselect planet
 canvas.style.cursor = 'crosshair';
 canvas.addEventListener('click', e => {
   const rect = canvas.getBoundingClientRect();
@@ -2381,25 +1909,18 @@ canvas.addEventListener('click', e => {
   const scaleY = canvas.height / rect.height;
   const mx = (e.clientX - rect.left) * scaleX;
   const my = (e.clientY - rect.top)  * scaleY;
-
   const list = helioMode
     ? ['saturn','jupiter','mars','earth','venus','mercury']
     : ['saturn','jupiter','mars','sun','venus','mercury','moon'];
-  let hit = null;
-  let bestDist = 18;
+  let hit = null; let bestDist = 18;
   list.forEach(b => {
     const angle = helioMode ? getHelioAngle(b, simDays) : displayAngle(b, simDays);
     const r     = helioMode ? HELIO_ORBITS[b] : ORBITS[b];
     const p     = toCanvas(angle, r);
-    const d     = Math.hypot(mx - p.x, my - p.y);
+    const d     = Math.hypot(mx-p.x, my-p.y);
     if (d < bestDist) { bestDist = d; hit = b; }
   });
-
-  if (hit === null) {
-    selectedPlanet = null;
-  } else {
-    selectedPlanet = (selectedPlanet === hit) ? null : hit;
-  }
+  selectedPlanet = (hit === null || selectedPlanet === hit) ? null : hit;
   updateFocusUI();
 });
 
@@ -2416,9 +1937,9 @@ function updateFocusUI() {
   }
 }
 
+// ── Geocentric button
 document.getElementById('btnGeo').addEventListener('click', () => {
-  helioMode = false;
-  lastTrailDay = null;
+  helioMode = false; lastTrailDay = null;
   Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
   Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnGeo').classList.add('active');
@@ -2426,30 +1947,10 @@ document.getElementById('btnGeo').addEventListener('click', () => {
   document.getElementById('helioNote').style.display = 'none';
 });
 
+// ── Heliocentric button  [FIX: rosette listener is now at top level, not nested here]
 document.getElementById('btnHelio').addEventListener('click', () => {
-  helioMode = true;
-  selectedPlanet = null;
-  lastTrailDay = null;
+  helioMode = true; selectedPlanet = null; lastTrailDay = null;
   Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
-
-document.getElementById('btnRosette').addEventListener('click', () => {
-  rosetteMode = !rosetteMode;
-  document.getElementById('btnRosette').classList.toggle('active', rosetteMode);
-  document.getElementById('rosetteNote').style.display = rosetteMode ? 'block' : 'none';
-  if (rosetteMode) {
-    // Paper says "running at 5 yr/s" — auto-set to 5yr/s (index 8) if below
-    if (speedIdx < 8) { speedIdx = 8; document.getElementById('speedRange').value = 8; updateSpeedLabel(); }
-    if (!playing) {
-      playing = true;
-      document.getElementById('btnPause').classList.remove('active');
-      document.getElementById('btnPlay').classList.add('active');
-    }
-  } else {
-    // Clear rosette when toggling off
-    mercuryRosette.length = 0;
-  }
-});
-
   Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnHelio').classList.add('active');
   document.getElementById('btnGeo').classList.remove('active');
@@ -2457,9 +1958,26 @@ document.getElementById('btnRosette').addEventListener('click', () => {
   updateFocusUI();
 });
 
+// ── Rosette button  [FIX: was incorrectly nested inside btnHelio listener]
+document.getElementById('btnRosette').addEventListener('click', () => {
+  rosetteMode = !rosetteMode;
+  document.getElementById('btnRosette').classList.toggle('active', rosetteMode);
+  document.getElementById('rosetteNote').style.display = rosetteMode ? 'block' : 'none';
+  if (rosetteMode) {
+    if (speedIdx < 8) { speedIdx = 8; document.getElementById('speedRange').value = 8; updateSpeedLabel(); }
+    if (!playing) {
+      playing = true;
+      document.getElementById('btnPause').classList.remove('active');
+      document.getElementById('btnPlay').classList.add('active');
+    }
+  } else {
+    mercuryRosette.length = 0;
+  }
+});
+
+// ── Sidereal / Tropical toggle
 document.getElementById('btnSidereal').addEventListener('click', () => {
-  siderealMode = true;
-  lastTrailDay = null;
+  siderealMode = true; lastTrailDay = null;
   Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
   Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnSidereal').classList.add('active');
@@ -2467,13 +1985,14 @@ document.getElementById('btnSidereal').addEventListener('click', () => {
 });
 
 document.getElementById('btnTropical').addEventListener('click', () => {
-  siderealMode = false;
-  lastTrailDay = null;
+  siderealMode = false; lastTrailDay = null;
   Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
   Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnTropical').classList.add('active');
   document.getElementById('btnSidereal').classList.remove('active');
 });
+
+// ── Boot
 document.getElementById('speedRange').value = speedIdx;
 updateSpeedLabel();
 updateFocusUI();
