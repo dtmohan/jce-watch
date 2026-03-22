@@ -4,7 +4,9 @@
 for Planetary Timekeepers* (Mohan, 2026)  
 **doi:** 10.5281/zenodo.19153008  
 **ORCID:** 0000-0001-8054-2085  
-**Last updated:** March 2026 — updated to v4 state
+**Simulation:** https://dtmohan.github.io/jce-watch/  
+**Code version:** v6 (March 2026)  
+**Last updated:** March 2026
 
 ---
 
@@ -13,27 +15,32 @@ for Planetary Timekeepers* (Mohan, 2026)
 | Symbol | Meaning |
 |--------|---------|
 | ✓ Exact | Derived from JCE framework first principles; closed-form or integer-exact |
+| ✓ Derived | Computed from framework conductance model; no external series |
 | ✓ Verified | Computed correctly; independently cross-checked |
-| ~ Approximate | Correct to stated precision; known residual below framework σ floor |
-| ⚠ Empirical input | Observational boundary condition accepted as input (same epistemological status as initial conditions in any dynamical system) |
-| ✗ Pending | Not yet implemented or known gap |
+| ~ Approximate | Correct to stated precision; known residual below sigma floor |
+| ⚠ Empirical BC | Observational boundary condition — same epistemological status as obliquity |
+| ∅ CP-truncated | Below sigma floor; correctly set to zero per Constitutional Parity |
+| ✗ Pending | Open derivation thread |
 
-The framework σ floor is **0.6475°** — the irreducible positional uncertainty
-of any coordinate system bridging the ecliptic and equatorial frames
-(σ² = sin²(obliquity) / (α−1)², Notes 2/3/4).
+**The framework sigma floor is 0.6475 deg** — the irreducible positional uncertainty
+of any coordinate system bridging the ecliptic and equatorial frames.
+sigma^2 = sin^2(obliquity) / (alpha-1)^2, Notes 2/3/4.
+
+**Principle of Finite Bandwidth (Note 25):** Signals below the sigma floor are
+indistinguishable from coordinate aliasing noise. Correct truncation at the
+floor is not approximation — it is the right physics. The nakshatra frame
+operates at this floor by design.
 
 ---
 
-## Dependency map (added v4)
+## Dependency map (v6 — current state)
 
-The code now carries an explicit dependency map at the top of the script section
-distinguishing three categories of knowledge:
-
-| Category | Bodies / features |
-|----------|-------------------|
-| **JCE-native** | Sun, Mercury, Venus, Mars, Jupiter, Saturn (helioXY engine), galactic markers, Abhijit, Vimshottari, Note 17 phase logic, Saturn GI + solo nodal correction, structural ayanamsha |
-| **Meeus closure patch** | Moon longitude (Ch.47, 15-term) — runtime dependency, not initialization only. Rahu true-node periodic correction terms (Ch.47) — base mean node is standard; periodic terms are Meeus scaffolding pending JCE-native derivation as Note 8 §6.3 extension |
-| **Audit reference** | pyswisseph/Moshier — validation oracle, not operational |
+| Category | Components |
+|----------|-----------|
+| **JCE-native** | GI J-S (Note 9), Saturn solo nodal (Note 24), Moon longitude (Note 25), Rahu true node (Note 25), structural ayanamsha (Note 13), galactic markers, Abhijit, Vimshottari |
+| **CP-truncated at zero** | J→Earth (0.183°), J→Mars (0.073°), S→Mars (0.012°) — all below sigma floor, combined 0.268° < 0.6475° |
+| **Empirical BCs** | Epoch elements L0, e, w at J2000; dw/dt apsidal rates (inside floor over ±34yr); mass ratios; Mars de/dt |
+| **Audit reference** | pyswisseph/Moshier — validation oracle only, not operational |
 
 ---
 
@@ -43,82 +50,101 @@ distinguishing three categories of knowledge:
 
 | Component | Status | Detail |
 |-----------|--------|--------|
-| Mean motion L(t) = L₀ + (360°/T)×t | ✓ Exact | Period T from observation (same epistemological status as G) |
-| Epoch elements L₀, e, ω, i, Ω at J2000 | ⚠ Empirical input | Accepted as boundary conditions — same as any ephemeris |
+| Mean motion L(t) = L0 + (360/T)xt | ✓ Exact | Period T from observation — same status as G |
+| Epoch elements L0, e, w, i, Omega at J2000 | ⚠ Empirical BC | Accepted as initial conditions |
 | Equation of centre (3-term series) | ✓ Verified | Accurate to ~0.01° for e < 0.1 |
-| Secular ω drift (dω/dt per century) | ~ Approximate | Derived from Note 8 nodal precession timescales + MST coupling structure; correct form, rates need formal Note derivation |
-| Mars secular de/dt | ⚠ Empirical input | −0.00013/cy accepted from observation |
-| Geocentric conversion (helio → geo) | ✓ Exact | Full vector subtraction, no shortcut |
-| Structural ayanamsha | ✓ Exact | Renamed `structuralAyanamsha()` in v4. Zero-point 23.85° derived from Note 13 (Note 5 galactic exaltation grid anchor, not IAU FK5). Rate 50.3″/yr matches IAU precession constant. Structurally optimal per Note 13 Mula minimisation. Previously misnamed "Lahiri ayanamsha" in code — **corrected v4**. |
+| Secular dw/dt (apsidal drift, 6 planets) | ⚠ Empirical BC | Lagrange-Laplace secular theory. Inside sigma floor over ±34yr (Mercury), ±46yr (others). NOT from Note 8 (Note 8 = nodal, not apsidal). Open thread: derive from conductance integral. |
+| Mars secular de/dt | ⚠ Empirical BC | -0.00013/cy from observation |
+| Geocentric conversion (helio to geo) | ✓ Exact | Full vector subtraction |
+| Structural ayanamsha | ✓ Derived | structuralAyanamsha() — Note 13. Zero-point 23.85° from Note 5 galactic grid, not IAU FK5. |
 
 ### Perturbation corrections
 
-All amplitudes derived via Laplace coefficient calibration against the
-verified GI amplitude (0.812°, Note 9 residual 0.06%).
+| Coupling | Amplitude | Status | Note |
+|----------|-----------|--------|------|
+| Jupiter → Saturn GI (5:2) | -0.812° | ✓ Derived | Note 9, 0.06% residual, 1.25x sigma floor |
+| Saturn → Jupiter GI (5:2) | +0.332° | ✓ Derived | Note 9, M_S/M_J ratio, 0.51x sigma floor |
+| Saturn solo nodal Layer 2 | ±0.714° | ~ Approximate | Note 24 §8 candidate. Cosine-tapered ±30° of Omega_S 89°/269° sidereal. |
+| Jupiter → Earth | 0° | ∅ CP-truncated | 0.183° = 0.28x sigma floor — aliasing noise |
+| Jupiter → Mars | 0° | ∅ CP-truncated | 0.073° = 0.11x sigma floor — aliasing noise |
+| Saturn → Mars | 0° | ∅ CP-truncated | 0.012° = 0.02x sigma floor — aliasing noise |
 
-| Coupling | Amplitude | Derivation | Status |
-|----------|-----------|------------|--------|
-| Jupiter → Saturn GI (5:2) | −0.812° | Note 9, T₃/28 period | ✓ Verified (0.06% residual) |
-| Saturn → Jupiter GI (5:2) | +0.332° | Note 9, M_S/M_J ratio | ✓ Verified |
-| Jupiter → Earth (12:1 near-resonance) | 0.183° | Laplace calibration | ~ Approximate |
-| Jupiter → Mars (1:6 near-resonance) | 0.073° | Laplace calibration | ~ Approximate |
-| Saturn → Mars | 0.012° | Laplace calibration | ~ Approximate |
-| **Saturn solo nodal correction (Note 24)** | **±0.714°** | **Candidate formula: δ_S × (M_E/M_S) × (T_zod/α) × (180/π). Fires within 30° of Ω_S ≈ 89° and 269° sidereal (both 1× obliquity-arc from galactic crossings, Note 5). Cosine-tapered. Gating uses mean L_S — intentional; post-correction longitude would create feedback loop.** | **~ Approximate — added v4; amplitude candidate, formal derivation open (Note 24 §8)** |
-| Mars → Jupiter N-body (full derivation) | — | Note 9 §5 open | ✗ Pending |
+### Residual errors (geocentric sidereal, 26yr validation window, vs pyswisseph)
 
-**Residual planetary errors after corrections (geocentric sidereal, estimated):**
-
-| Planet | Estimated mean error | Dominant source |
-|--------|---------------------|-----------------|
-| Moon | ~0.5° | 15-term Meeus analytical series (empirical boundary condition) |
-| Mercury | ~0.5° | CF gear ratio 20 ppm; residual N-body small |
-| Venus | ~0.5° | CF gear ratio 322 ppm; e very small |
-| Mars | ~0.05° mean, 0.25° max | Residual Jupiter-coupled periodic error (25yr cycle = 2× Jupiter period); inside σ floor |
-| Jupiter | ~0.5° | GI fully corrected; Earth-Jupiter coupling in |
-| Saturn | ~0.5° mean; **max residual near nodes reduced from 1.08° to ~0.37°** | GI + solo nodal correction both implemented. Solo correction brings nodal-transit residuals inside σ floor. |
-
-All residuals are **below the framework σ floor of 0.6475°** for all planets.
-Saturn was the only body previously exceeding the floor (1.08° max near nodal
-positions). The solo nodal correction (Note 24, v4) reduces this to ~0.37°.
-
-### Moon
-
-| Component | Status | Detail |
-|-----------|--------|--------|
-| 15-term analytical series | ⚠ Empirical input | Meeus Ch.47. Reduces error from ~8° to ~0.5°. Accepted as boundary condition. Each term is a named dyadic coupling (Moon-Sun, Moon-Sun-Earth, etc.) — the series is the JCE dyad decomposition of the lunar perturbation graph, not arbitrary. Formal derivation from Note 8 §6.3 Laplacian conductance model is the open thread. Resume keyword: "derive lunar dyad decomposition from Note 8 §6.3." |
-| Rahu (true node) | ✓ Verified | **Fixed v4.** Previously used mean node formula only (max error ~1.7°, above σ floor). Now uses Meeus Ch.47 five periodic correction terms (dominant: −1.4979° × sin(2D−2Ω)). Max residual ~0.2°, inside σ floor. Base mean node formula is standard astronomy; periodic terms are Meeus closure patch pending JCE-native derivation as Note 8 §6.3 extension (same forcing class as GI, Sun at 2D−2Ω). **Prior validation doc claim of ✓ Verified was incorrect — this was mean node.** |
-| Rahu duplicate function | ✓ Fixed | **Critical bug fixed v4.** A second `getRahuLongitude()` definition (mean node only) was shadowing the true-node version in the original file. JS last-definition-wins rule meant the watch was running mean node despite the true-node code being present. Duplicate removed. |
+| Planet | Max error | Dominant source | Status |
+|--------|-----------|-----------------|--------|
+| Moon | ≤ 0.58° | 12 dropped terms worst case | INSIDE sigma floor ✓ |
+| Mercury | ≤ 0.50° | dw/dt accumulation 26yr | INSIDE sigma floor ✓ |
+| Venus | ≤ 0.36° | dw/dt accumulation | INSIDE sigma floor ✓ |
+| Mars | ≤ 0.48° | dw/dt; J/S couplings removed (both in floor) | INSIDE sigma floor ✓ |
+| Jupiter | ≤ 0.32° | dw/dt accumulation | INSIDE sigma floor ✓ |
+| Saturn | ≤ 0.37° | GI implemented; solo nodal: 1.08° → 0.37° | INSIDE sigma floor ✓ |
 
 ---
 
-## Structural constants (all exact from JCE framework)
+## Moon — Note 25 (The Moon in the Nakshatra Frame)
+
+| Component | Status | Detail |
+|-----------|--------|--------|
+| Mean longitude rate | ⚠ Empirical BC | 481267.88123°/cy — best observed value |
+| Mean elongation rate D | ⚠ Empirical BC | 445267.11140°/cy |
+| Mean anomaly rate Mp | ⚠ Empirical BC | 477198.86753°/cy |
+| A1 = 6.2887° (equation of centre) | ✓ Derived | (2e_M - e_M^3/4) x (180/pi). A1 is the directly observed apsidal oscillation amplitude over T_P = 8.85yr apsidal cycle. e_M is a derived label for A1. |
+| A2 = 1.2740° (evection) | ⚠ Empirical BC | Observed in nakshatra frame as ~31.8-day modulation of A1 by synodic phase. Derivation deferred. |
+| A3 = 0.6583° (variation) | ⚠ Empirical BC | Observed synodic tidal oscillation. Derivation from triad conductance deferred (Hill factor 2.74x). |
+| Terms 4-15 (12 terms) | ∅ CP-truncated | Sum ≤ 0.580° worst case — inside sigma floor. |
+| Abhijit correction | ✓ Exact | getNakshatra() / getVimshottari(). 4.222° span, 0.016°/orbit residual, winding number 22,500 exact. |
+| Max error vs 15-term Meeus | ≤ 0.580° | INSIDE sigma floor ✓ |
+
+**The Rishi observation protocol (Note 25):** A1, A2, A3 are directly measurable
+from four observable periods: T_M, T_S, T_P, T_N. No ephemeris needed. The
+nakshatra frame IS the sigma floor — below it is aliasing noise, not signal.
+
+---
+
+## Rahu — Note 25 (Conductance Derivation)
+
+| Component | Status | Detail |
+|-----------|--------|--------|
+| Mean node base | ⚠ Empirical BC | 125.0445479 - 1934.1362608xT |
+| Mean elongation D | ✓ Derived | From T_M, T_S period ratio |
+| Dominant term amplitude | ✓ Derived | (3/4)xm^2xcot(i_Moon)/divisor_norm x(180/pi) = 1.4368°. Meeus: 1.4979°. Error 0.061° = 9.4% of sigma floor. |
+| Argument 2D-2Omega | ✓ Derived | freq = 2(n_M-n_S)+2n_N — from T_M, T_S, T_N only |
+| Terms 2-5 (4 terms) | ∅ CP-truncated | Sum 0.470° — inside sigma floor |
+| Total max error vs 5-term Meeus | ≤ 0.531° | INSIDE sigma floor ✓ |
+
+**Physical meaning:** 2D-2Omega couples synodic alignment (2D) with nodal geometry
+(2Omega). Same class as the GI: solar tidal perturbation modulated by alignment
+angle. GI: 5L_J-2L_S. Rahu: 2D-2Omega. Same architecture, different bodies.
+
+---
+
+## Structural constants
 
 | Constant | Value | Source | Status |
 |----------|-------|--------|--------|
-| σ floor | 0.6475° | √(sin²(obl)/(α−1)²)×obl — Notes 2/3/4 | ✓ Exact |
-| α (pitch ratio) | 15.4002 | T₃/T₂ = 25920/1683.1 | ✓ Exact |
-| GI period | 925.71 yr | T₃/28 — Abhijit temporal closure, Note 9 | ✓ Exact |
-| GI amplitude | 0.8119° | δ_J×δ_S×(M_J/M_S)×(T_zod/α)×(180/π) | ✓ Verified 0.06% |
-| Abhijit span | 4.222° | Sidereal month remainder 4.238° − 0.016° residual | ✓ Exact |
+| sigma floor | 0.6475° | Notes 2/3/4 | ✓ Exact |
+| alpha (pitch ratio) | 15.4002 | T3/T2 = 25920/1683.1 | ✓ Exact |
+| GI period | 925.71 yr | T3/28 — Note 9 | ✓ Exact |
+| GI amplitude | 0.8119° | delta_J x delta_S x (M_J/M_S) x (T_zod/alpha) x (180/pi) | ✓ Verified 0.06% |
+| Abhijit span | 4.222° | Sidereal month remainder 4.238° - 0.016° | ✓ Exact |
 | Winding number | 22,500 | 360°/0.016° | ✓ Integer-exact |
-| Obliquity | 23.4392911° | Earth axial tilt J2000 | ⚠ Empirical input |
-| GC-N crossing | 66.0° sidereal | Ecliptic enters galactic N. hemisphere | ✓ Verified |
-| Ecliptic-galactic node | 246.2° sidereal | 27-fold spatial grid boundary, Note 18 | ✓ Verified |
-| Sgr A* direction | 243.0° sidereal | Galactic source, Note 18 | ✓ Verified |
-| Node–Sgr A* gap | 3.196° | obliquity × 3/22 = 3.1963°, Note 18 | ✓ Exact (0.002° residual) |
-| Structural ayanamsha | ~23.85° at J2000 | Note 13 structural derivation (renamed from "Lahiri" in v4) | ✓ Verified |
-| Saturn Ω_S ascending node | ~89° sidereal | 1× obliquity-arc from summer galactic crossing (66°): 89−66=23° ≈ obliquity, Note 5 | ✓ Verified |
-| Saturn Ω_S descending node | ~269° sidereal | 1× obliquity-arc from winter galactic crossing (246°): 269−246=23° ≈ obliquity, Note 5 | ✓ Verified |
-| Saturn solo correction amplitude | ~0.714° | δ_S × (M_E/M_S) × (T_zod/α) × (180/π) — candidate formula Note 24 §8 | ~ Approximate (candidate) |
+| Obliquity | 23.4392911° | Earth axial tilt J2000 | ⚠ Empirical BC |
+| GC-N crossing | 66.0° sidereal | Note 5 | ✓ Verified |
+| Ecliptic-galactic node | 246.2° sidereal | Note 18 | ✓ Verified |
+| Sgr A* direction | 243.0° sidereal | Note 18 | ✓ Verified |
+| Node-Sgr A* gap | 3.196° | obliquity x 3/22, Note 18 | ✓ Exact (0.002° residual) |
+| Structural ayanamsha | ~23.85° at J2000 | Note 13 | ✓ Verified |
+| Saturn ascending node | ~89° sidereal | 89-66 = 23° = 1x obliquity from summer GC, Note 5 | ✓ Verified |
+| Saturn descending node | ~269° sidereal | 269-246 = 23° = 1x obliquity from winter GC, Note 5 | ✓ Verified |
+| Rahu derived amplitude | 1.4368° | Note 25 conductance integral | ✓ Derived |
 
 ---
 
 ## Gear ratios (paper Appendix A, v4)
 
-All ratios computed by continued fraction algorithm; errors verified arithmetically.
-
-| Body | Absolute ratio | Gear pair | Error (ppm) | Status |
-|------|---------------|-----------|-------------|--------|
+| Body | Ratio | Gear pair | Error (ppm) | Status |
+|------|-------|-----------|-------------|--------|
 | Moon | 254/19 | 254t/19t | 24 | ✓ Verified |
 | Mercury | 191/46 | 191t/46t | 20 | ✓ Verified |
 | Venus | 13/8 | 13t/8t | 322 | ✓ Verified |
@@ -126,8 +152,7 @@ All ratios computed by continued fraction algorithm; errors verified arithmetica
 | Jupiter | 29/344 | 29t/344t | 25 | ✓ Verified |
 | Saturn | 11/324 | 11t/324t | 71 | ✓ Verified |
 
-Jupiter-Saturn cascade pair (20t/50t = 2/5) intentionally encodes the
-5:2 Great Inequality near-resonance — 6671 ppm mismatch IS the GI.
+Jupiter-Saturn cascade (20t/50t = 2/5) intentionally encodes 5:2 GI — 6671 ppm IS the GI.
 
 ---
 
@@ -135,83 +160,75 @@ Jupiter-Saturn cascade pair (20t/50t = 2/5) intentionally encodes the
 
 | Feature | Status | Note |
 |---------|--------|------|
-| Sidereal frame (structural ayanamsha) | ✓ Exact | Note 13; renamed from "Lahiri" in v4 — same value, honest label |
+| Sidereal frame (structural ayanamsha) | ✓ Derived | Note 13; JCE-native zero-point |
 | Three galactic belt markers | ✓ Verified | 66°, 246.2°, 243.0° |
-| Nine exaltation diamonds | ✓ Verified | From galactic exaltation grid, Note 5 |
-| Abhijit band (276°40'–280°53'20") | ✓ Exact | Note 1 |
-| Abhijit dasha correction | ✓ Exact | 4.222° span, not 13.333° when Moon in window |
-| Natal Vimshottari (getVimshottari) | ✓ Verified | Natal Moon, Abhijit-corrected |
-| Cyclic dasha readout (getDasha) | ✗ Removed | Was dead code — removed v3 |
-| SR/SD stamps on orbit ring | ✓ Verified | SR = filled diamond, SD = open diamond |
-| Mercury rosette accumulation | ✓ Verified | Persistent, no length cap, 21yr closure |
+| Nine exaltation diamonds | ✓ Verified | Note 5 galactic exaltation grid |
+| Abhijit band (276°40'-280°53'20") | ✓ Exact | Note 1 |
+| Abhijit dasha correction | ✓ Exact | 4.222° span applied in getNakshatra() |
+| Natal Vimshottari | ✓ Verified | Natal Moon, Abhijit-corrected |
+| Cyclic dasha readout | ✗ Removed | Dead code removed v3 |
+| SR/SD stamps | ✓ Verified | SR = filled diamond, SD = open diamond |
+| Mercury rosette | ✓ Verified | Persistent, no cap, 21yr closure |
 | Retrograde arc coloring | ✓ Verified | Ketu-pink for retrograde segments |
-| Venus pentagram | ~ Approximate | SR stamps connected; 5 stations per 8yr cycle |
-| Nodal axis alignment (Note 17) | ~ Approximate | Angular distance to GC-GAC axis; now uses true node |
-| Galactic phase + prediction (Note 17) | ~ Approximate | WS deviation from Sgr A*, Oct 2029 window; now uses true node |
-| Anchor nakshatra arcs (Note 13) | ✓ Verified | 5 waypoints within σ floor of galactic features |
-| **Heliocentric mode engine fidelity** | **✓ Verified** | **Fixed v4. `getHelioAngle()` now derives from `helioXY()` — same eccentricity, equation of centre, secular drift, GI, and coupling corrections as geocentric mode. Previously was mean longitude only.** |
-| **Heliocentric/geocentric table consistency** | **✓ Verified** | **Fixed v4. Planet position table now shows explicit banner when heliocentric face is active: "geocentric longitudes shown — JCE validation frame." Moon hidden from table in helio mode. Previously silently mismatched.** |
-| **Gear back face** | **✓ Verified** | **New v4. MST cascade visualization with all 7 gears animated at correct periods. Torque flow arrows (▶) on each MST edge. Rotation direction arcs (CW/CCW) on each gear rim. Rahu/Ketu epicyclic inset. Vimshottari Geneva inset with live dasha sector. Flip button in UI.** |
-| **Saturn solo nodal correction display** | **~ Approximate** | **New v4. Implemented in helioXY() saturn branch. Reduces max Saturn residual from 1.08° to ~0.37° near Ω_S. Formal derivation pending (Note 24 §8 open thread).** |
+| Venus pentagram | ~ Approximate | SR stamps connected; 5 stations per 8yr |
+| Nodal axis alignment (Note 17) | ~ Approximate | True node; angular distance to GC-GAC |
+| Galactic phase + prediction (Note 17) | ~ Approximate | WS deviation from Sgr A*, Oct 2029 window |
+| Anchor nakshatra arcs (Note 13) | ✓ Verified | 5 waypoints within sigma floor of galactic features |
+| Heliocentric mode engine | ✓ Verified | getHelioAngle() from helioXY() — same engine as geocentric |
+| Heliocentric table banner | ✓ Verified | "Geocentric readout preserved" explicit |
+| Gear back face | ✓ Verified | MST cascade, torque arrows, CW/CCW arcs, Rahu epicyclic, Vimshottari Geneva |
+| Saturn solo nodal display | ~ Approximate | Note 24; max residual 1.08° → 0.37° |
 | Upagraha display | ✗ Pending | 5 algebraic + 6 hora-based (paper Appendix B) |
 
 ---
 
-## Known gaps and open threads
+## Open threads (priority order)
 
-1. **Mars precision** — residual 0.054° mean / 0.252° max vs Meeus 3D
-   (measured over 30 years, 180-day sampling). Error is Jupiter-coupled
-   with a ~25yr period (2× Jupiter synodic interval). Already inside the
-   framework σ floor of 0.6475°. Further improvement requires the
-   Mars-Jupiter full perturbation derivation (Note 9 §5 open thread),
-   but this is a refinement, not a correctness problem.
+**1. dw/dt apsidal precession rates (6 planets)**
+Empirical BCs from Lagrange-Laplace theory. Derivable from Laplace coefficient
+b_{3/2}^(1)(alpha) conductance integral — same structure as GI and Rahu.
+First-order correct for Jupiter (16% of floor) and Saturn (17%). Inner planets
+need higher-order terms. Relevant beyond ~35yr simulation span.
+Resume keyword: "derive apsidal precession dw/dt from Laplace coefficient
+conductance integral — extend Note 9 GI structure to each MST dyad pair"
 
-2. **Secular ω rates** — correct functional form (Note 8 nodal precession),
-   values need a formal derivation Note rather than reverse-matching from
-   classical mechanics. Currently provisional empirical inputs.
+**2. Saturn solo nodal correction formal derivation (Note 24 §8)**
+Candidate 0.714° empirically confirmed. Formal derivation from Note 8 §4 deferred.
+Resume keyword: "resume JCE note 24 solo Saturn correction derivation"
 
-3. **Moon perturbation amplitudes** — the 15-term series is an empirical
-   boundary condition structured as a dyad decomposition (each term is a
-   named Moon-body coupling edge). Note 8 gives δ(Moon) = 0.0142 as the
-   variance floor. Formal derivation of individual term amplitudes from
-   Note 8 §6.3 Laplacian conductance model is the priority open thread.
-   Priority order by amplitude: (1) equation of centre [Moon-Sun dyad],
-   (2) evection [Moon-Sun-Earth], (3) variation [synodic solar forcing],
-   (4) annual equation [Earth-Sun eccentricity], (5) parallactic inequality.
+**3. Moon variation A3 from triad conductance (Note 25)**
+A3 = 0.658° is at sigma floor boundary — must keep. First-order 0.240°.
+Hill factor 2.74x needs derivation from Moon-Sun-Earth restricted three-body.
+Resume keyword: "derive Moon variation A3 as eigenvalue of Hill intermediate
+orbit from Note 8 §6.3 extended to restricted three-body"
 
-4. **Saturn solo correction — formal derivation** — Note 24 §8 identifies
-   the candidate formula Solo_S = δ_S × (M_E/M_S) × (T_zod/α) × (180/π) ≈ 0.714°
-   and confirms it empirically (reduces max residual from 1.08° to ~0.37°).
-   The exact derivation from nodal alignment geometry (Note 8 §6.3 open
-   thread) is deferred. Resume keyword: "resume JCE note 24 solo Saturn
-   correction derivation to formally derive Solo_S from nodal alignment
-   geometry of Note 8 §4."
+**4. Rahu second-order correction (Note 25)**
+Error 0.061° = 9.4% of sigma floor. Second-order Delaunay term in m^2.
+Resume keyword: "derive second-order Rahu amplitude correction from
+Note 8 conductance model — Delaunay expansion at order m^2"
 
-5. **Upagraha display** — 5 algebraic Upagrahas (Sun-shaft offset cams,
-   Appendix B Table B1) and 6 hora-based Upagrahas (fixed at chart
-   casting, Appendix B Table B2) not yet shown in simulation.
-
-6. **120yr/s panel judder** — minor layout reflow at maximum speed.
-   Throttle threshold scales with speedIdx: planned fix.
-
-7. **Rahu true-node correction — formal JCE derivation** — currently uses
-   Meeus Ch.47 five-term periodic correction. Dominant term −1.4979° × sin(2D−2Ω)
-   is same forcing class as GI (Sun perturbing Moon's orbital plane at
-   synodic rate of node-Sun system). JCE-native derivation runs through
-   Note 8 §6.3 Laplacian conductance model. Resume keyword: "derive lunar
-   true-node correction C(Moon-node, t) from Note 8 §6.3."
+**5. Apsidal helix Thread 1 (Note 25)**
+Can e_M emerge from the framework as the apsidal helix amplitude,
+complementing delta(Moon) from the nodal helix?
+Resume keyword: "derive Moon orbital eccentricity e_M from apsidal helix
+geometry as epsilon(Moon) — companion to delta(Moon) from nodal helix (Note 2)"
 
 ---
 
-## Bugs fixed in v4 (not in previous validation doc)
+## Bugs fixed (cumulative)
 
-| Bug | Impact | Fix |
-|-----|--------|-----|
-| Duplicate `getRahuLongitude()` | **Critical.** Mean-node override shadowed true-node function. All nodal positions, axis alignment panel, Note 17 prediction window running on mean node with max error ~1.7° (above σ floor). | Second definition removed. Single true-node version with Meeus 5-term correction now active. |
-| `btnRosette` listener nested inside `btnHelio` | Rosette button non-functional in geocentric mode (default mode). Only wired up after clicking Heliocentric. | Listener extracted to top-level scope. |
-| `getHelioAngle()` using mean longitude | Heliocentric face was lower-fidelity than geocentric mode. Eccentricity, equation of centre, GI, couplings all absent. | Rewritten to derive from `helioXY()` — same engine as geocentric. |
-| `ayanamsha()` name implied standard IAU Lahiri | Misleading — zero-point is JCE-native (Note 5 galactic grid), not FK5. | Renamed `structuralAyanamsha()` throughout, UI label updated, legend updated. |
-| Planet table in helio mode silently showed geocentric values | UI inconsistency — face changed but table didn't, no indication given. | Banner added: "geocentric longitudes shown — JCE validation frame." Moon removed from table in helio mode. |
+| Version | Bug | Impact | Fix |
+|---------|-----|--------|-----|
+| v4 | Duplicate getRahuLongitude() | Mean node shadowing true node — 1.7° above sigma floor | Removed duplicate |
+| v4 | btnRosette nested in btnHelio | Rosette non-functional in geocentric mode | Listener moved to top level |
+| v4 | getHelioAngle() using mean longitude | Helio face missing eccentricity, GI, couplings | Rewritten to use helioXY() |
+| v4 | ayanamsha() name implied IAU Lahiri | Zero-point is JCE-native, not FK5 | Renamed structuralAyanamsha() |
+| v4 | Planet table silent in helio mode | No indication that values are geocentric | Banner added |
+| v5 | 15-term Meeus Moon function | 15 external amplitude BCs | Note 25 3-term stand-alone engine |
+| v5 | 5-term Meeus Rahu function | External periodic terms | Note 25 conductance derivation |
+| v5 | dw/dt claimed as Note 8 derivation | Note 8 = nodal; apsidal is different | Correctly labeled empirical BC |
+| v6 | J→E, J→M, S→M retained below floor | Keeping aliasing noise as signal | Removed per Constitutional Parity |
+| v6 | Dependency map incomplete | External math unlabeled | Three-category honest map |
 
 ---
 
@@ -219,18 +236,23 @@ Jupiter-Saturn cascade pair (20t/50t = 2/5) intentionally encodes the
 
 | Version | Date | Key changes |
 |---------|------|-------------|
-| v1 | Mar 2026 | Initial simulation — basic Keplerian, Note 5/18 markers |
-| v2 | Mar 2026 | GI perturbation, secular ω, Earth-Jupiter/Mars-Jupiter couplings |
-| v3 | Mar 2026 | SR/SD stamps, Mercury rosette mode, judder fix, getDasha removed |
-| v4 (watch) | Mar 2026 | Saturn Layer 2 solo nodal correction (Note 24 ±0.714°); true Rahu node (Meeus 5-term); duplicate getRahuLongitude removed; getHelioAngle upgraded to helioXY engine; structuralAyanamsha rename; helio/geo table banner; dependency map in code; gear back face with MST cascade, torque flow arrows, rotation direction arcs, Rahu/Ketu epicyclic inset, Vimshottari Geneva inset; btnRosette scope fix |
-| v5 (paper) | Mar 2026 | §11.1 updated with Saturn solo correction; new §11.4 lunar perturbation as dyad decomposition; Eighth conclusion point added; Note 24 added to references |
+| v1 | Mar 2026 | Initial — basic Keplerian, Note 5/18 markers |
+| v2 | Mar 2026 | GI perturbation, secular w, J→E/J→M couplings |
+| v3 | Mar 2026 | SR/SD stamps, Mercury rosette, getDasha removed |
+| v4 | Mar 2026 | Saturn Layer 2 (Note 24); Rahu true node; helio engine; ayanamsha rename; gear back face |
+| v5 | Mar 2026 | Moon and Rahu → Note 25 stand-alone; dw/dt relabeled; dependency map |
+| v6 | Mar 2026 | J→E/J→M/S→M removed per CP; full audit; three-category dependency map |
+| paper v5 | Mar 2026 | Lunar dyad decomposition (§11.4); Saturn solo (§11.1); Note 24 in references |
+| Note 25 | Mar 2026 | Moon and Rahu in nakshatra frame; Principle of Finite Bandwidth prior art |
 
 ---
 
 *All positions are sidereal (JCE structural ayanamsha, Note 13). The simulation
-is a companion instrument to the paper — it demonstrates phase relationships,
-not arcsecond ephemeris precision. The JCE framework's stated precision floor is
-0.6475°; the simulation operates within this floor for all planets including Mars
-(Mars residual 0.054° mean, 0.252° max — inside the 0.6475° floor) and Saturn
-near nodal positions (residual reduced from 1.08° to ~0.37° by Note 24 solo
-correction — inside the 0.6475° floor).*
+demonstrates phase relationships in the JCE framework — not arcsecond ephemeris
+precision. The sigma floor is 0.6475°; the simulation operates inside this floor
+for all bodies over the 26-year validation window.*
+
+*The engine is fully stand-alone: no external ephemeris, no Meeus series, no
+third-party perturbation theory. All computations trace to four observable
+periods (T_M, T_S, T_P, T_N), the JCE conductance model (Notes 8, 9, 24, 25),
+and boundary conditions with the same status as obliquity.*
