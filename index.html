@@ -533,6 +533,7 @@ let speedIdx = 3;  // default: 1 day/s (index 3 in new array)
 let lastTime = null;
 let selectedPlanet = null;
 let helioMode = false;
+let lastUITime = 0;  // wall-clock ms — throttle panel DOM writes to ~12fps
 let rosetteMode = false;  // Mercury rosette accumulation mode (paper §11.3)
 const mercuryRosette = [];  // persistent, never shifted — accumulates all petals
 
@@ -2261,7 +2262,12 @@ function loop(ts) {
   }
 
   drawWatch(simDays);
-  updateUI(simDays);
+  // Throttle panel DOM updates to ~12fps — canvas still draws at 60fps
+  // Prevents layout reflow judder caused by innerHTML writes every frame
+  if (ts - lastUITime >= 80) {
+    updateUI(simDays);
+    lastUITime = ts;
+  }
   requestAnimationFrame(loop);
 }
 
