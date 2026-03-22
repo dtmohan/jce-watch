@@ -733,34 +733,31 @@ function helioXY(key, days) {
     const phi_GI = (5 * L_J - 2 * L_S) * DEG;
     giCorr = -0.812 * Math.sin(phi_GI);
 
-    // ── Layer 2: Saturn solo nodal correction (Note 24 §8–9)
-    // Fires within 30° of ascending node (~89° sidereal) or descending node (~269° sidereal).
-    // Both nodes sit at exactly 1× obliquity-arc from their nearest galactic crossings (Note 5).
-    // Candidate formula: Solo_S = delta_S × (M_E/M_S) × (T_zod/alpha) × (180/pi) ≈ 0.714°
-    // Shape: cosine taper — peaks at node, falls to zero at ±30° window edge.
-    // Sign: positive — corrects the observed negative residuals near nodal positions.
-    // Empirical target: reduces Saturn max residual from 1.08° to ~0.37° (inside σ floor 0.6475°).
+    // ── Layer 2: Saturn solo nodal correction (Note 24 §8–9) — DISABLED v8
+    // Audit finding (2024-03-23 audit): the solo nodal correction stacks additively
+    // with the GI correction near the ascending node (Saturn ~77.78° sidereal, 11.22°
+    // from node), causing a 1.296° total error where base alone is only 0.07°.
     //
-    // INTENTIONAL DESIGN: The nodal gate uses L_S (mean heliocentric longitude),
-    // NOT the fully corrected Saturn longitude. This is correct structural behaviour:
-    // the solo correction is a property of Saturn's orbital geometry relative to the
-    // galactic nodal axis, and should be gated on the structural (mean) position.
-    // Using the post-correction longitude would create a feedback loop where the
-    // correction modulates its own trigger. Mean L_S as structural proxy is deliberate.
-    {
-      const satSid = ((L_S - structuralAyanamsha(days)) % 360 + 360) % 360;
-      const angSep = (node, sid) => {
-        let d = Math.abs(sid - node);
-        if (d > 180) d = 360 - d;
-        return d;
-      };
-      const NODE_WIN = 30;    // degree window (Note 24 §9 Step 1)
-      const SOLO_AMP = 0.714; // degrees (Note 24 §8 candidate formula)
-      const d89  = angSep(89,  satSid);
-      const d269 = angSep(269, satSid);
-      if (d89  < NODE_WIN) giCorr += SOLO_AMP * Math.cos(d89  * Math.PI / (2 * NODE_WIN));
-      if (d269 < NODE_WIN) giCorr += SOLO_AMP * Math.cos(d269 * Math.PI / (2 * NODE_WIN));
-    }
+    //   Base error at 2004-03-23:     +0.070° (base engine is correct)
+    //   GI correction:                +0.761° (formally derived, Note 9 — do not change)
+    //   Base + GI:                    +0.697° (just above σ floor)
+    //   Solo correction (v7):         +0.595° (same direction — stacks, not compensates)
+    //   Full error:                   +1.296°
+    //
+    // The solo correction was calibrated against raw residuals BEFORE the GI correction
+    // was applied. Applied AFTER the GI, it double-counts near nodes where GI already
+    // overshoots the base error.
+    //
+    // Correct behaviour: solo correction should oppose the GI overshoot near nodes.
+    // The sign must be derived from the full residual after GI, not from the raw residual.
+    // This requires the formal Note 24 derivation (open thread priority 2).
+    //
+    // With solo disabled: Saturn max error = ~0.700° (base + GI only at 2004-03-23).
+    // This is 0.054° above the σ floor — same margin as Jupiter's current miss.
+    // Honest documented limitation until Note 24 formal derivation is complete.
+    //
+    // Resume keyword: "derive Saturn solo nodal correction sign and amplitude
+    // from full residual after GI correction — Note 24 §8 formal derivation"
 
   } else if (key === 'earth') {
     // CP ANALYSIS: Jupiter→Earth coupling amplitude = 0.183°
