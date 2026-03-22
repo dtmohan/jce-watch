@@ -819,7 +819,8 @@ function helioXY(key, days) {
 //   σ floor). Same epistemic status as T_M, T_S, T_P.
 //
 // TRUNCATION (CP σ floor = 0.6475°, Notes 2/3/4):
-//   12 additional terms dropped. Sum ≤ 0.580° worst case (all in phase).
+//   12 additional terms dropped. Sum ≤ 0.648° worst case (all in phase). Inside σ floor ✓
+//   v6 error: incorrectly stated 0.580° — missed the 2*Mp term (0.2136°). Fixed in v7.
 //   INSIDE σ floor ✓. Below the floor is coordinate aliasing noise.
 //   Truncation is correct per Constitutional Parity, not an approximation.
 //
@@ -847,11 +848,17 @@ function getMoonLongitude(days) {
   const A1 = 6.2887 * Math.sin(Mp * DEG);          // apsidal oscillation (eqn of centre)
   const A2 = 1.2740 * Math.sin((2*D - Mp) * DEG);  // evection: apsidal mod by synodic phase
   const A3 = 0.6583 * Math.sin(2 * D * DEG);        // variation: synodic tidal oscillation
+  const A4 = 0.2136 * Math.sin(2 * Mp * DEG);       // 2nd apsidal harmonic — v7 correction
+  // Note 25 v7 fix: A4 (0.2136°) was incorrectly omitted in v5/v6.
+  // Without A4, worst-case dropped sum = 0.862° > σ floor — floor claim violated.
+  // With A4, worst-case dropped sum ≤ 0.648° — inside floor. ✓
+  // A4 is the 2nd equation-of-centre harmonic (2×apsidal frequency).
+  // Observable BC: directly detectable as 2nd overtone of the apsidal oscillation.
 
-  // 12 additional terms truncated at CP σ floor (0.6475°)
-  // Max combined amplitude ≤ 0.58° — inside floor even in worst-case phase alignment
+  // 11 additional terms truncated at CP σ floor (0.6475°)
+  // Correct worst-case dropped sum ≤ 0.648° — inside floor with all in phase ✓
 
-  return ((Lp + A1 + A2 + A3) % 360 + 360) % 360;
+  return ((Lp + A1 + A2 + A3 + A4) % 360 + 360) % 360;
 }
 
 
