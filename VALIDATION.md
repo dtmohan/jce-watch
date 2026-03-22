@@ -38,16 +38,19 @@ Independent audit: ChatGPT, daily absolute sidereal longitude error vs Swiss
 Ephemeris, 2000-01-01 through 2026-03-22, structural ayanamsha on both sides.
 Source: raw index.html from GitHub main branch.
 
-| Body | Max error | Mean error | Status |
-|------|-----------|------------|--------|
-| Sun | 0.374° | 0.178° | ✓ Inside floor |
-| Moon | 0.616° | 0.142° | ✓ Inside floor |
-| Mercury | 0.630° | 0.190° | ✓ Inside floor |
-| Venus | 0.499° | 0.180° | ✓ Inside floor |
-| Mars | 0.386° | 0.158° | ✓ Inside floor |
-| Jupiter | 0.729° | 0.249° | ✗ Outside (0.054° over) |
-| Saturn | 1.296° | 0.564° | ✗ Outside |
-| Rahu | 3.321° | 1.203° | ✗ Outside — see diagnosis |
+| Body | Max error | Mean error | Status | Code version |
+|------|-----------|------------|--------|--------------|
+| Sun | 0.374° | 0.178° | ✓ Inside floor | v7/v8 |
+| Moon | 0.616° | 0.142° | ✓ Inside floor | v7 (A4 fix) |
+| Mercury | 0.630° | 0.190° | ✓ Inside floor | v7/v8 |
+| Venus | 0.499° | 0.180° | ✓ Inside floor | v7/v8 |
+| Mars | 0.386° | 0.158° | ✓ Inside floor | v7/v8 |
+| Jupiter | 0.729° | 0.249° | ✗ Outside (0.054° over) | v7/v8 |
+| Saturn | ~0.700°* | ~0.35°* | ✗ Outside (0.054° over, predicted) | v8 — solo disabled |
+| Rahu | 3.321° | 1.203° | ✗ Outside — see diagnosis | v7/v8 |
+
+*Saturn v8 prediction: solo correction disabled. Based on audit decomposition showing
+base+GI alone = 0.697° at max-error date (2004-03-23). Not yet re-audited.
 
 **Accurate public claim (v7):**
 > The v7 engine stays inside the sigma floor (0.6475°) for Sun, Moon, Mercury,
@@ -59,20 +62,22 @@ honest statement of current state.
 
 **Progress across versions:**
 
-| Body | GitHub old | v6 | v7 |
-|------|-----------|----|----|
-| Sun | 0.533° ✓ | 0.374° ✓ | 0.374° ✓ |
-| Moon | 0.082° ✓ | 0.750° ✗ | 0.616° ✓ |
-| Mercury | 0.771° ✗ | 0.630° ✓ | 0.630° ✓ |
-| Venus | 1.001° ✗ | 0.499° ✓ | 0.499° ✓ |
-| Mars | 0.423° ✓ | 0.386° ✓ | 0.386° ✓ |
-| Jupiter | 0.710° ✗ | 0.729° ✗ | 0.729° ✗ |
-| Saturn | 1.297° ✗ | 1.296° ✗ | 1.296° ✗ |
-| Rahu | 3.476° ✗ | 3.321° ✗ | 3.321° ✗ |
+| Body | GitHub old | v6 | v7 | v8 |
+|------|-----------|----|----|-----|
+| Sun | 0.533° ✓ | 0.374° ✓ | 0.374° ✓ | 0.374° ✓ |
+| Moon | 0.082° ✓ | 0.750° ✗ | 0.616° ✓ | 0.616° ✓ |
+| Mercury | 0.771° ✗ | 0.630° ✓ | 0.630° ✓ | 0.630° ✓ |
+| Venus | 1.001° ✗ | 0.499° ✓ | 0.499° ✓ | 0.499° ✓ |
+| Mars | 0.423° ✓ | 0.386° ✓ | 0.386° ✓ | 0.386° ✓ |
+| Jupiter | 0.710° ✗ | 0.729° ✗ | 0.729° ✗ | 0.729° ✗ |
+| Saturn | 1.297° ✗ | 1.296° ✗ | 1.296° ✗ | ~0.700°* ✗ |
+| Rahu | 3.476° ✗ | 3.321° ✗ | 3.321° ✗ | 3.321° ✗ |
 
 Old = pre-session GitHub code (v3/v4 state).
-V6 = CP truncation of sub-floor couplings, Note 25 Moon/Rahu, dependency map.
-V7 = Moon A4 term added (arithmetic fix to error budget).
+V6 = CP truncation of sub-floor couplings, Note 25 Moon/Rahu.
+V7 = Moon A4 term added — Moon inside floor.
+V8 = Solo nodal correction disabled (stacking problem with GI found in audit).
+*v8 Saturn not yet re-audited — predicted from decomposition at 2004-03-23.
 
 ---
 
@@ -86,16 +91,35 @@ V7 = Moon A4 term added (arithmetic fix to error budget).
   integral (open thread #1 below). Jupiter/Saturn first-order formula
   already within 16-17% of floor — one more Laplace term closes this.
 
-### Saturn 1.296°
-- dw/dt accumulation over 26yr: 0.364°
-- GI Layer 1 (±0.812°) implemented and verified
-- Solo nodal Layer 2 (±0.714°) implemented — helping but not enough
-- Remaining 0.932° beyond dw/dt is unexplained
-- **Open question:** on what date does the 1.296° max occur, and what
-  was Saturn's sidereal longitude? If near 89°/269° (nodes): solo
-  correction sign or amplitude is wrong. If away from nodes: GI
-  phase error or dw/dt compounding.
-- **Ask auditor:** date and Saturn longitude at max error point.
+### Saturn ~0.700° predicted (v8, solo disabled)
+
+**Audit decomposition at 2004-03-23 (max-error date):**
+
+| Component | Value | Error vs SE |
+|-----------|-------|-------------|
+| SE sidereal Saturn | 72.6093° | — |
+| Base Keplerian only | 72.5393° | +0.070° |
+| Base + GI only | 73.3059° | +0.697° |
+| Base + solo only | 73.1381° | +0.529° |
+| Base + GI + solo (v7) | 73.9056° | +1.296° |
+
+**Finding:** the base engine is correct (0.070°). The GI correction alone puts
+Saturn at +0.697° (just above floor). The solo correction (+0.595° at this date)
+stacks in the same direction instead of compensating.
+
+**Root cause:** the solo correction was calibrated against raw residuals BEFORE
+the GI was applied. Applied AFTER the GI, it double-counts near nodes where the
+GI already overshoots. At 2004-03-23, Saturn is 11.22° from the ascending node
+(89° sidereal), deep in the 30° activation window.
+
+**v8 fix:** solo correction disabled. Saturn max error predicted ~0.700°
+(base + GI only), still 0.054° above floor — same margin as Jupiter.
+
+**Next fix:** derive the solo correction sign and amplitude from the full
+residual AFTER GI using the Note 24 conductance model. The correction should
+oppose the GI overshoot near nodes, not reinforce it.
+Resume: "derive Saturn solo nodal correction sign from full residual after GI
+— Note 24 §8 formal derivation, sign determined by post-GI residual not raw" 
 
 ### Rahu 3.321°
 - Error with 5-term Meeus: 3.476°. Error with 1-term JCE: 3.321°.
@@ -266,6 +290,7 @@ Resume: "derive second-order Rahu amplitude — Delaunay expansion at m²"
 | v6 | J→E/J→M/S→M retained below floor | Removed per CP |
 | v6 | Dependency map incomplete | Three-category honest map |
 | v7 | Moon A4 term missing — error budget 0.862° stated as 0.580° | A4 added; budget corrected to 0.648°; audit confirms 0.616° ✓ |
+| v8 | Solo nodal correction stacks with GI near ascending node — 1.296° error at 2004-03-23 where base alone is only 0.070° | Solo disabled; Saturn predicted ~0.700° (base + GI only) pending re-audit and Note 24 formal derivation |
 
 ---
 
@@ -278,11 +303,13 @@ Resume: "derive second-order Rahu amplitude — Delaunay expansion at m²"
 | v5 | Mar 2026 | Moon + Rahu → Note 25; dw/dt relabeled |
 | v6 | Mar 2026 | J→E/J→M/S→M removed per CP; full audit |
 | v7 | Mar 2026 | Moon A4 term added (0.2136° × sin(2Mp)); Moon now inside floor (0.616°) |
+| v8 | Mar 2026 | Solo nodal correction disabled — stacks with GI at 2004-03-23 node passage; Saturn predicted ~0.700° |
 
 ---
 
-*Confirmed inside sigma floor (0.6475°) over 2000–2026 audit window:*  
+*Confirmed inside sigma floor (0.6475°) over 2000–2026 audit window (v7/v8):*  
 *Sun (0.374°), Moon (0.616°), Mercury (0.630°), Venus (0.499°), Mars (0.386°)*
 
-*Near-threshold: Jupiter (0.729° — 0.054° over)*  
-*Open: Saturn (1.296°), Rahu (3.321° — audit methodology question pending)*
+*Near-threshold: Jupiter (0.729° — 0.054° over floor)*  
+*Near-threshold predicted: Saturn (~0.700° in v8 — solo disabled, pending re-audit)*  
+*Open: Rahu (3.321° — SE node flag investigation pending)*
