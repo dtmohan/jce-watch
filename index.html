@@ -311,6 +311,11 @@
         <button id="btnSidereal" class="active">Sidereal ✦</button>
         <button id="btnTropical">Tropical</button>
       </div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button id="btnGeo" class="active">⊕ Geocentric</button>
+        <button id="btnHelio">☉ Heliocentric</button>
+      </div>
+      <div id="helioNote" style="display:none;font-size:10px;color:var(--ketu);margin-top:6px;font-style:italic;line-height:1.5;">Moon &amp; nodes hidden · Retrograde vanishes</div>
     </div>
 
     <!-- Epoch -->
@@ -479,10 +484,15 @@ const LABELS = {
 // ═══════════════════════════════════════════════════════════════════════════
 let simDays = EPOCH_DAYS;
 let playing = false;
-let // ── Init
-speedIdx = 4;
+let speedIdx = 4;
 let lastTime = null;
-let selectedPlanet = null;   // null = all shown; string = isolate that planet
+let selectedPlanet = null;
+let helioMode = false;   // false = geocentric (default), true = heliocentric
+
+// Heliocentric display orbit radii (AU-proportional, compressed for display)
+const HELIO_ORBITS = {
+  mercury: 55, venus: 84, earth: 115, mars: 148, jupiter: 190, saturn: 232,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CANVAS SETUP
@@ -580,7 +590,159 @@ function isInAbhijit(siderealLon) {
   return siderealLon >= ABHIJIT_START && siderealLon <= ABHIJIT_END;
 }
 
-// ── Planetary trail system
+// ── Heliocentric display angle (for helio mode)
+function getHelioAngle(body, days) {
+  if (body === 'earth') {
+    const e = helioXY('earth', days);
+    const lon = Math.atan2(e.y, e.x) / DEG;
+    return ((lon - (siderealMode ? ayanamsha(days) : 0)) % 360 + 360) % 360;
+  }
+  const o = HELIO[body];
+  if (!o) return 0;
+  const lon = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360;
+  return ((lon - (siderealMode ? ayanamsha(days) : 0)) % 360 + 360) % 360;
+}
+
+// ── Earth-planet distance in AU (for apparent size)
+function getDistance(body, days) {
+  if (body === 'moon') return 0.00257;  // fixed ~384,000 km in AU
+  if (body === 'sun')  return 1.0;
+  const earth = helioXY('earth', days);
+  const planet = helioXY(body, days);
+  return Math.sqrt((planet.x-earth.x)**2 + (planet.y-earth.y)**2);
+}
+
+// ── Phase angle for inferior planets (Sun-Planet-Earth angle)
+function getPhaseAngle(body, days) {
+  const earth  = helioXY('earth', days);
+  const planet = helioXY(body, days);
+  // Vector planet→sun and planet→earth
+  const ps = { x: -planet.x, y: -planet.y };
+  const pe = { x: earth.x - planet.x, y: earth.y - planet.y };
+  const dot = ps.x*pe.x + ps.y*pe.y;
+  const mag = Math.sqrt(ps.x**2+ps.y**2) * Math.sqrt(pe.x**2+pe.y**2);
+  return Math.acos(Math.max(-1, Math.min(1, dot/mag)));
+}
+
+// ── Draw Earth at (cx, cy) with radius r
+function drawEarth(cx, cy, r) {
+  ctx.save();
+  // Atmosphere outer glow
+  const atm = ctx.createRadialGradient(cx, cy, r*0.85, cx, cy, r*2.2);
+  atm.addColorStop(0, 'rgba(100,160,255,0.25)');
+  atm.addColorStop(0.5,'rgba(80,130,220,0.10)');
+  atm.addColorStop(1, 'rgba(60,100,200,0)');
+  ctx.beginPath(); ctx.arc(cx, cy, r*2.2, 0, TWO_PI);
+  ctx.fillStyle = atm; ctx.fill();
+
+  // Ocean base
+  const ocean = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, 0, cx, cy, r);
+  ocean.addColorStop(0,   '#4A90D9');
+  ocean.addColorStop(0.5, '#2060B0');
+  ocean.addColorStop(1,   '#0A3070');
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
+  ctx.fillStyle = ocean; ctx.fill();
+
+  // Continent silhouettes — simplified polygons scaled to radius
+  const s = r / 18;  // scale factor (designed at r=18)
+  ctx.fillStyle = 'rgba(60,110,50,0.75)';
+
+  // Americas (left side)
+  ctx.beginPath();
+  ctx.moveTo(cx + s*(-12), cy + s*(-10));
+  ctx.lineTo(cx + s*(-7),  cy + s*(-14));
+  ctx.lineTo(cx + s*(-4),  cy + s*(-12));
+  ctx.lineTo(cx + s*(-3),  cy + s*(-7));
+  ctx.lineTo(cx + s*(-6),  cy + s*(-4));
+  ctx.lineTo(cx + s*(-8),  cy + s*(2));
+  ctx.lineTo(cx + s*(-6),  cy + s*(10));
+  ctx.lineTo(cx + s*(-9),  cy + s*(14));
+  ctx.lineTo(cx + s*(-13), cy + s*(10));
+  ctx.lineTo(cx + s*(-14), cy + s*(4));
+  ctx.lineTo(cx + s*(-11), cy + s*(-2));
+  ctx.closePath(); ctx.fill();
+
+  // Eurasia + Africa (right side)
+  ctx.beginPath();
+  ctx.moveTo(cx + s*(0),   cy + s*(-14));
+  ctx.lineTo(cx + s*(12),  cy + s*(-13));
+  ctx.lineTo(cx + s*(15),  cy + s*(-8));
+  ctx.lineTo(cx + s*(14),  cy + s*(-3));
+  ctx.lineTo(cx + s*(8),   cy + s*(0));
+  ctx.lineTo(cx + s*(5),   cy + s*(6));
+  ctx.lineTo(cx + s*(7),   cy + s*(13));
+  ctx.lineTo(cx + s*(3),   cy + s*(15));
+  ctx.lineTo(cx + s*(0),   cy + s*(10));
+  ctx.lineTo(cx + s*(-1),  cy + s*(2));
+  ctx.lineTo(cx + s*(2),   cy + s*(-5));
+  ctx.lineTo(cx + s*(1),   cy + s*(-10));
+  ctx.closePath(); ctx.fill();
+
+  // Australia (bottom right)
+  ctx.beginPath();
+  ctx.moveTo(cx + s*(9),   cy + s*(8));
+  ctx.lineTo(cx + s*(14),  cy + s*(7));
+  ctx.lineTo(cx + s*(15),  cy + s*(12));
+  ctx.lineTo(cx + s*(10),  cy + s*(15));
+  ctx.lineTo(cx + s*(7),   cy + s*(13));
+  ctx.closePath(); ctx.fill();
+
+  // Cloud wisps
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.beginPath(); ctx.ellipse(cx+s*(-5), cy+s*(-6), s*7, s*2, -0.4, 0, TWO_PI); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+s*(6),  cy+s*(4),  s*5, s*1.5, 0.3, 0, TWO_PI); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+s*(-2), cy+s*(8),  s*4, s*1.5, -0.2,0, TWO_PI); ctx.fill();
+
+  // Atmosphere rim
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
+  const rim = ctx.createRadialGradient(cx, cy, r*0.88, cx, cy, r);
+  rim.addColorStop(0, 'rgba(100,180,255,0)');
+  rim.addColorStop(1, 'rgba(120,200,255,0.45)');
+  ctx.fillStyle = rim; ctx.fill();
+
+  ctx.restore();
+}
+
+// ── Draw Sun at (cx, cy) with radius r
+function drawSun(cx, cy, r) {
+  ctx.save();
+  // Outer corona glow
+  const corona = ctx.createRadialGradient(cx, cy, r*0.8, cx, cy, r*4);
+  corona.addColorStop(0,   'rgba(255,220,80,0.35)');
+  corona.addColorStop(0.3, 'rgba(255,160,30,0.15)');
+  corona.addColorStop(1,   'rgba(255,100,0,0)');
+  ctx.beginPath(); ctx.arc(cx, cy, r*4, 0, TWO_PI);
+  ctx.fillStyle = corona; ctx.fill();
+
+  // Corona ray lines
+  ctx.strokeStyle = 'rgba(255,200,60,0.12)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * TWO_PI;
+    ctx.beginPath();
+    ctx.moveTo(cx + r*1.1*Math.cos(a), cy + r*1.1*Math.sin(a));
+    ctx.lineTo(cx + r*2.8*Math.cos(a), cy + r*2.8*Math.sin(a));
+    ctx.stroke();
+  }
+
+  // Solar surface
+  const surface = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, 0, cx, cy, r);
+  surface.addColorStop(0,   '#FFF5CC');
+  surface.addColorStop(0.3, '#FFE066');
+  surface.addColorStop(0.7, '#FFB830');
+  surface.addColorStop(1,   '#E07010');
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
+  ctx.fillStyle = surface; ctx.fill();
+
+  // Limb darkening
+  const limb = ctx.createRadialGradient(cx, cy, r*0.7, cx, cy, r);
+  limb.addColorStop(0, 'rgba(0,0,0,0)');
+  limb.addColorStop(1, 'rgba(80,20,0,0.35)');
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, TWO_PI);
+  ctx.fillStyle = limb; ctx.fill();
+
+  ctx.restore();
+}
 const TRAIL_LEN = 180;
 const TRAIL_STEP = 2;
 const trails = {};
@@ -830,11 +992,12 @@ function drawWatch(days) {
     ctx.restore();
   });
 
-  // ── Rahu ring — slow retrograde, outermost display ring
+  // ── Rahu ring — slow retrograde, outermost display ring (geocentric only)
   const rahuAngle = displayAngle('rahu', days);
   const ketuAngle = (rahuAngle + 180) % 360;
   const R_RAHU = ZODIAC_INNER - 6;
-  // Draw Rahu arc (glowing band, 40° arc around Rahu point)
+
+  if (!helioMode) {
   const rahuRad = (rahuAngle - 90) * DEG;
   ctx.beginPath();
   ctx.arc(CX, CY, R_RAHU, rahuRad - 20 * DEG, rahuRad + 20 * DEG);
@@ -863,31 +1026,38 @@ function drawWatch(days) {
   ctx.fillText('☊', rp.x, rp.y - 14);
   ctx.fillStyle = '#C94C6A';
   ctx.fillText('☋', kp.x, kp.y - 14);
+  } // end !helioMode (Rahu/Ketu)
 
-  // ── Orbital rings
-  const bodies = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
-  bodies.forEach(b => {
+  // ── Orbital rings — geocentric uses fixed ORBITS, helio uses HELIO_ORBITS
+  if (helioMode) {
+    Object.values(HELIO_ORBITS).forEach(r => {
+      ctx.beginPath(); ctx.arc(CX, CY, r, 0, TWO_PI);
+      ctx.strokeStyle = 'rgba(255,200,60,0.06)';
+      ctx.lineWidth = 0.5; ctx.stroke();
+    });
+  } else {
+    const bodies = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
+    bodies.forEach(b => {
+      ctx.beginPath(); ctx.arc(CX, CY, ORBITS[b], 0, TWO_PI);
+      ctx.strokeStyle = 'rgba(201,168,76,0.07)';
+      ctx.lineWidth = 0.5; ctx.stroke();
+    });
+
+    // ── Ketu differential needle (geocentric only)
+    const ketuRad = (ketuAngle - 90) * DEG;
+    const needleLen = ORBITS.moon * 0.85;
     ctx.beginPath();
-    ctx.arc(CX, CY, ORBITS[b], 0, TWO_PI);
-    ctx.strokeStyle = `rgba(201,168,76,0.07)`;
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
-  });
+    ctx.moveTo(CX, CY);
+    ctx.lineTo(CX + needleLen * Math.cos(ketuRad), CY + needleLen * Math.sin(ketuRad));
+    ctx.strokeStyle = 'rgba(201,76,106,0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]); ctx.stroke(); ctx.setLineDash([]);
+  }
 
-  // ── Ketu differential needle (pointing from center toward Ketu)
-  const ketuRad = (ketuAngle - 90) * DEG;
-  const needleLen = ORBITS.moon * 0.85;
-  ctx.beginPath();
-  ctx.moveTo(CX, CY);
-  ctx.lineTo(CX + needleLen * Math.cos(ketuRad), CY + needleLen * Math.sin(ketuRad));
-  ctx.strokeStyle = 'rgba(201,76,106,0.5)';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([3, 5]);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  // ── Retrograde stamps + trails (geocentric only)
+  if (!helioMode) {
 
-  // ── Retrograde stamps — midpoint markers on orbit ring
-  // Venus: draw pentagram lines connecting stamps in occurrence order
+  // Venus pentagram lines
   if (stamps.venus.length >= 2) {
     const dimVenus = selectedPlanet !== null && selectedPlanet !== 'venus';
     ctx.save();
@@ -964,7 +1134,10 @@ function drawWatch(days) {
     }
   });
 
-  // ── Planetary trails — per-planet color, isolation support
+  } // end !helioMode (stamps + trails)
+
+  // ── Planetary trails (geocentric only)
+  if (!helioMode) {
   Object.keys(trails).forEach(b => {
     const tr = trails[b];
     if (tr.length < 2) return;
@@ -998,92 +1171,167 @@ function drawWatch(days) {
       ctx.stroke();
     }
   });
+  } // end !helioMode (trails)
+
+  // ── Conjunction glows — pairs within 5° (geocentric only)
+  if (!helioMode) {
+    const cBodies = ['moon','mercury','venus','sun','mars','jupiter','saturn'];
+    for (let i = 0; i < cBodies.length; i++) {
+      for (let j = i+1; j < cBodies.length; j++) {
+        const a1 = displayAngle(cBodies[i], days);
+        const a2 = displayAngle(cBodies[j], days);
+        let sep = Math.abs(a1 - a2);
+        if (sep > 180) sep = 360 - sep;
+        if (sep < 6) {
+          const p1 = toCanvas(a1, ORBITS[cBodies[i]]);
+          const p2 = toCanvas(a2, ORBITS[cBodies[j]]);
+          const midX = (p1.x+p2.x)/2, midY = (p1.y+p2.y)/2;
+          const alpha = (1 - sep/6) * 0.4;
+          const cg = ctx.createRadialGradient(midX,midY,0,midX,midY,30);
+          cg.addColorStop(0, `rgba(255,240,160,${alpha})`);
+          cg.addColorStop(1, 'rgba(255,240,160,0)');
+          ctx.beginPath(); ctx.arc(midX,midY,30,0,TWO_PI);
+          ctx.fillStyle = cg; ctx.fill();
+        }
+      }
+    }
+  }
 
   // ── Planets + labels
-  const planetList = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
+  const geoList  = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
+  const helioList = ['saturn','jupiter','mars','earth','venus','mercury'];
+  const planetList = helioMode ? helioList : geoList;
+
   planetList.forEach(b => {
-    const angle = displayAngle(b, days);
-    const r = ORBITS[b];
-    const p = toCanvas(angle, r);
-    const sz = SIZES[b];
-    const dimmed = selectedPlanet !== null && selectedPlanet !== b;
+    // Position
+    const angle = helioMode ? getHelioAngle(b, days) : displayAngle(b, days);
+    const r     = helioMode ? HELIO_ORBITS[b] : ORBITS[b];
+    const p     = toCanvas(angle, r);
+
+    // Apparent size — scale by inverse distance from Earth
+    let szBase = SIZES[b] || 4;
+    if (!helioMode && b !== 'moon' && b !== 'sun' && b !== 'rahu') {
+      const dist = getDistance(b, days);
+      // Normalise: Venus ranges 0.27–1.73 AU, Mars 0.37–2.67 AU
+      const refDist = { mercury:0.6, venus:0.72, mars:1.0, jupiter:5.0, saturn:9.0 };
+      const ref = refDist[b] || 1.0;
+      const scale = Math.sqrt(ref / Math.max(dist, 0.1));
+      szBase = Math.max(2, Math.min(szBase * scale, szBase * 2.5));
+    }
+    const sz = szBase;
+
+    const dimmed      = selectedPlanet !== null && selectedPlanet !== b;
     const highlighted = selectedPlanet === b;
     const globalAlpha = dimmed ? 0.2 : 1.0;
+    const col = b === 'earth' ? '#4A90D9' : COL[b];
 
     ctx.save();
     ctx.globalAlpha = globalAlpha;
 
     // Glow
-    const glowR = highlighted ? sz * 5 : sz * 3;
-    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
-    glow.addColorStop(0, COL[b] + (highlighted ? 'DD' : 'AA'));
-    glow.addColorStop(1, COL[b] + '00');
-    ctx.beginPath(); ctx.arc(p.x, p.y, glowR, 0, TWO_PI);
+    const glowR = highlighted ? sz*5 : sz*3;
+    const glow  = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,glowR);
+    glow.addColorStop(0, col+(highlighted?'DD':'AA'));
+    glow.addColorStop(1, col+'00');
+    ctx.beginPath(); ctx.arc(p.x,p.y,glowR,0,TWO_PI);
     ctx.fillStyle = glow; ctx.fill();
 
-    // Planet dot
-    ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, TWO_PI);
-    ctx.fillStyle = COL[b]; ctx.fill();
-
-    // Highlight ring when selected
-    if (highlighted) {
-      ctx.beginPath(); ctx.arc(p.x, p.y, sz + 5, 0, TWO_PI);
-      ctx.strokeStyle = COL[b] + 'CC';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+    // Planet dot or Earth mini sphere
+    if (b === 'earth') {
+      drawEarth(p.x, p.y, sz);
+    } else {
+      ctx.beginPath(); ctx.arc(p.x,p.y,sz,0,TWO_PI);
+      ctx.fillStyle = col; ctx.fill();
     }
 
-    // Retrograde ring — Ketu marker
-    const retro = isRetrograde(b, days);
-    if (retro) {
-      ctx.beginPath(); ctx.arc(p.x, p.y, sz + 3.5, 0, TWO_PI);
-      ctx.strokeStyle = 'rgba(201,76,106,0.8)';
-      ctx.lineWidth = 1.2;
-      ctx.setLineDash([2, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    // ── Phase shading for Mercury and Venus (inferior planets, geocentric only)
+    if (!helioMode && (b === 'mercury' || b === 'venus')) {
+      const phaseAngle = getPhaseAngle(b, days);
+      const illum = (1 + Math.cos(phaseAngle)) / 2;
+      if (illum < 0.95) {
+        const sunAngle = displayAngle('sun', days);
+        const pAngle   = displayAngle(b, days);
+        let   diff     = sunAngle - pAngle;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        const shadowDir = (pAngle - 90) * DEG + (diff > 0 ? 0 : Math.PI);
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(shadowDir);
+        const darkAlpha = (1 - illum) * 0.75;
+        // Terminator radius: positive always; flip arc direction based on phase
+        const terminatorR = Math.abs(sz * (2 * illum - 1));
+        const fullCircle = illum < 0.5;  // dark side is majority
+        ctx.beginPath();
+        if (fullCircle) {
+          // More than half dark: draw the lit crescent
+          ctx.arc(0, 0, sz, -Math.PI/2, Math.PI/2, false);
+          ctx.arc(0, 0, Math.max(0.1, terminatorR), Math.PI/2, -Math.PI/2, false);
+        } else {
+          // Less than half dark: draw the dark crescent
+          ctx.arc(0, 0, sz, -Math.PI/2, Math.PI/2, false);
+          ctx.arc(0, 0, Math.max(0.1, terminatorR), Math.PI/2, -Math.PI/2, true);
+        }
+        ctx.closePath();
+        ctx.fillStyle = `rgba(0,0,0,${darkAlpha})`;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Highlight ring
+    if (highlighted) {
+      ctx.beginPath(); ctx.arc(p.x,p.y,sz+5,0,TWO_PI);
+      ctx.strokeStyle = col+'CC';
+      ctx.lineWidth = 1.5; ctx.stroke();
+    }
+
+    // Retrograde ring (geocentric only)
+    if (!helioMode) {
+      const retro = isRetrograde(b, days);
+      if (retro) {
+        ctx.beginPath(); ctx.arc(p.x,p.y,sz+3.5,0,TWO_PI);
+        ctx.strokeStyle = 'rgba(201,76,106,0.8)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([2,3]); ctx.stroke(); ctx.setLineDash([]);
+      }
     }
 
     // Saturn ring
     if (b === 'saturn') {
       ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate(20 * DEG);
-      ctx.scale(1, 0.4);
-      ctx.beginPath(); ctx.arc(0, 0, sz * 2.2, 0, TWO_PI);
-      ctx.strokeStyle = COL.saturn + '80';
-      ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.translate(p.x,p.y); ctx.rotate(20*DEG); ctx.scale(1,0.4);
+      ctx.beginPath(); ctx.arc(0,0,sz*2.2,0,TWO_PI);
+      ctx.strokeStyle = COL.saturn+'80'; ctx.lineWidth=1.5; ctx.stroke();
       ctx.restore();
     }
 
-    ctx.restore(); // restore globalAlpha
+    ctx.restore();
 
-    // ── Planet label — always drawn at full alpha but fades when dimmed
+    // Label
     const labelAlpha = dimmed ? 0.15 : (highlighted ? 1.0 : 0.75);
-    // Position label outward from center
-    const labelAngle = (angle - 90) * DEG;
-    const labelR = r + sz + 11;
-    const lx = CX + labelR * Math.cos(labelAngle);
-    const ly = CY + labelR * Math.sin(labelAngle);
-    const lbl = LABELS[b];
+    const labelAngle = (angle-90)*DEG;
+    const labelR     = r + sz + 11;
+    const lx = CX + labelR*Math.cos(labelAngle);
+    const ly = CY + labelR*Math.sin(labelAngle);
+    const lbl = b === 'earth'
+      ? { sym: '⊕', name: 'Earth' }
+      : (LABELS[b] || { sym: b[0].toUpperCase(), name: b });
     ctx.save();
     ctx.globalAlpha = labelAlpha;
-    ctx.font = `${highlighted ? 'bold ' : ''}10px Cinzel, serif`;
-    ctx.fillStyle = COL[b];
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    // Symbol only at normal speed; sym+name when highlighted
+    ctx.font = `${highlighted?'bold ':''}10px Cinzel, serif`;
+    ctx.fillStyle = col;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(highlighted ? `${lbl.sym} ${lbl.name}` : lbl.sym, lx, ly);
     ctx.restore();
   });
 
-  // ── Centre jewel
-  const cj = ctx.createRadialGradient(CX, CY, 0, CX, CY, 8);
-  cj.addColorStop(0, '#F5E5A0');
-  cj.addColorStop(0.5, '#C9A84C');
-  cj.addColorStop(1, '#5A4820');
-  ctx.beginPath(); ctx.arc(CX, CY, 6, 0, TWO_PI);
-  ctx.fillStyle = cj; ctx.fill();
+  // ── Centre body — Earth (geocentric) or Sun (heliocentric)
+  if (helioMode) {
+    drawSun(CX, CY, 18);
+  } else {
+    drawEarth(CX, CY, 18);
+  }
 
   // ── Filigree tick marks
   for (let t = 0; t < 360; t += 6) {
@@ -1113,14 +1361,24 @@ function drawWatch(days) {
     ctx.stroke();
   }
 
-  // ── Label: current year in centre (small, tasteful)
+  // ── Label: current year + mode indicator
   const jd = J2000_JD + days;
   const dateStr = jdToDate(jd).split(' ');
   ctx.font = '700 11px Cinzel, serif';
   ctx.fillStyle = 'rgba(201,168,76,0.4)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(dateStr[2], CX, CY + 22);  // year only, subtle
+  ctx.fillText(dateStr[2], CX, CY + 30);
+
+  // Heliocentric mode banner
+  if (helioMode) {
+    ctx.font = '9px Cinzel, serif';
+    ctx.fillStyle = 'rgba(255,200,60,0.55)';
+    ctx.fillText('HELIOCENTRIC', CX, CY + 46);
+    ctx.font = '8px EB Garamond, serif';
+    ctx.fillStyle = 'rgba(201,76,106,0.45)';
+    ctx.fillText('retrograde is a geocentric phenomenon', CX, CY + 59);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1275,13 +1533,16 @@ canvas.addEventListener('click', e => {
   const mx = (e.clientX - rect.left) * scaleX;
   const my = (e.clientY - rect.top)  * scaleY;
 
-  const planetList = ['saturn','jupiter','mars','sun','venus','mercury','moon'];
+  const list = helioMode
+    ? ['saturn','jupiter','mars','earth','venus','mercury']
+    : ['saturn','jupiter','mars','sun','venus','mercury','moon'];
   let hit = null;
-  let bestDist = 18; // px hit radius
-  planetList.forEach(b => {
-    const angle = displayAngle(b, simDays);
-    const p = toCanvas(angle, ORBITS[b]);
-    const d = Math.hypot(mx - p.x, my - p.y);
+  let bestDist = 18;
+  list.forEach(b => {
+    const angle = helioMode ? getHelioAngle(b, simDays) : displayAngle(b, simDays);
+    const r     = helioMode ? HELIO_ORBITS[b] : ORBITS[b];
+    const p     = toCanvas(angle, r);
+    const d     = Math.hypot(mx - p.x, my - p.y);
     if (d < bestDist) { bestDist = d; hit = b; }
   });
 
@@ -1305,6 +1566,28 @@ function updateFocusUI() {
     el.style.color = COL[selectedPlanet];
   }
 }
+
+document.getElementById('btnGeo').addEventListener('click', () => {
+  helioMode = false;
+  lastTrailDay = null;
+  Object.keys(trails).forEach(b => { trails[b] = []; });
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  document.getElementById('btnGeo').classList.add('active');
+  document.getElementById('btnHelio').classList.remove('active');
+  document.getElementById('helioNote').style.display = 'none';
+});
+
+document.getElementById('btnHelio').addEventListener('click', () => {
+  helioMode = true;
+  selectedPlanet = null;
+  lastTrailDay = null;
+  Object.keys(trails).forEach(b => { trails[b] = []; });
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  document.getElementById('btnHelio').classList.add('active');
+  document.getElementById('btnGeo').classList.remove('active');
+  document.getElementById('helioNote').style.display = 'block';
+  updateFocusUI();
+});
 
 document.getElementById('btnSidereal').addEventListener('click', () => {
   siderealMode = true;
