@@ -435,6 +435,15 @@
 // CONSTANTS & ORBITAL DATA
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── DEPENDENCY MAP ──────────────────────────────────────────────────────────
+// JCE-native:  Sun, Mercury, Venus, Mars, Jupiter, Saturn (helioXY engine),
+//              galactic markers, Abhijit, Vimshottari, Note 17 phase logic,
+//              Saturn GI + solo nodal correction, structural ayanamsha.
+// Meeus patch: Moon longitude (Ch.47, 15-term) — runtime, dasha-seed-critical.
+//              Rahu true-node correction terms (Ch.47) — periodic terms only.
+// Audit ref:   pyswisseph/Moshier — validation oracle, not operational.
+// ────────────────────────────────────────────────────────────────────────────
+
 const TWO_PI = Math.PI * 2;
 const DEG = Math.PI / 180;
 const OBLIQUITY = 23.4392911 * DEG;
@@ -557,11 +566,12 @@ function structuralAyanamsha(days) {
   return 23.85 + days * (50.3 / 3600) / 365.25;
 }
 
-// ── Rahu TRUE node longitude (degrees, tropical)
-// Mean node formula gives max error ~1.7° (period ~173 days) — larger than
-// the σ floor of 0.6475°. True node adds the dominant periodic correction.
-// Source: Meeus "Astronomical Algorithms" Ch.47 (same series as Moon).
-// Max residual after this term: ~0.2°, well inside the σ floor.
+// STATUS: Meeus Ch.47 closure patch — true-node periodic correction terms.
+// Base mean node formula is standard astronomy. The five periodic correction
+// terms (dominant: −1.4979° × sin(2D−2Ω)) are Meeus Ch.47 scaffolding,
+// pending JCE-native derivation as an extension of Note 8 §6.3 (C(Moon-node, t)
+// from Laplacian conductance — same forcing class as the GI, Sun at 2D−2Ω).
+// Resume keyword: "derive lunar true-node correction from Note 8 §6.3"
 function getRahuLongitude(days) {
   const T  = days / 36525.0;
   // Mean node (same as before — this is the base)
@@ -691,6 +701,12 @@ function helioXY(key, days) {
   return { x: r * Math.cos(trueLon), y: r * Math.sin(trueLon) };
 }
 
+// STATUS: Meeus Ch.47 closure patch — runtime dependency, not initialization only.
+// Every nakshatra display, Vimshottari seed, and Abhijit check runs through this
+// continuously. Moon is the most perturbation-heavy fast body and dasha-seed-critical.
+// Replace when JCE lunar perturbation branch (Note 8 §6.3, C(Moon, t)) is formally
+// derived from the Laplacian conductance framework. Until then, Meeus stays here
+// legitimately as the lunar closure patch.
 function getMoonLongitude(days) {
   const T = days / 36525.0;
   const Lp = ((218.3164477 + 481267.88123421*T) % 360 + 360) % 360;
@@ -714,12 +730,6 @@ function getMoonLongitude(days) {
             + 0.015327 * Math.sin((2*D - 2*F)*DEG)
             - 0.012528 * Math.sin((Mp + 2*F)*DEG));
   return ((Lp + dL) % 360 + 360) % 360;
-}
-
-function getRahuLongitude(days) {
-  const T = days / 36525.0;
-  const Om = ((125.0445479 - 1934.1362608*T) % 360 + 360) % 360;
-  return Om;
 }
 
 function isRetrograde(body, days) {
@@ -880,14 +890,13 @@ function dateToDays(date) {
 }
 
 function getHelioAngle(body, days) {
-  if (body === 'earth') {
-    const e = helioXY('earth', days);
-    const lon = Math.atan2(e.y, e.x) / DEG;
-    return ((lon - (siderealMode ? structuralAyanamsha(days) : 0)) % 360 + 360) % 360;
-  }
-  const o = HELIO[body];
-  if (!o) return 0;
-  const lon = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360;
+  // Derives heliocentric display longitude from helioXY() — same engine as geocentric.
+  // This gives heliocentric mode full fidelity: eccentricity, equation of centre,
+  // secular drift, and GI/coupling perturbations all active.
+  // Earth is handled identically to the geocentric engine's Sun calculation (inverse).
+  const xy = helioXY(body === 'earth' ? 'earth' : body, days);
+  if (!xy) return 0;
+  const lon = Math.atan2(xy.y, xy.x) / DEG;
   return ((lon - (siderealMode ? structuralAyanamsha(days) : 0)) % 360 + 360) % 360;
 }
 
@@ -1700,7 +1709,7 @@ function updateUI(days) {
   const helioModeBanner = helioMode
     ? `<div style="font-size:9px;font-style:italic;color:var(--ketu);border:1px solid var(--ketu);
         border-radius:2px;padding:4px 6px;margin-bottom:8px;line-height:1.5;">
-        ☉ Heliocentric face active<br>
+        ☉ Heliocentric face active — full engine fidelity<br>
         <span style="opacity:0.8;">Geocentric longitudes shown — JCE validation frame</span></div>`
     : '';
   const bodies2Filtered = helioMode ? bodies2.filter(b => b.key !== 'moon') : bodies2;
