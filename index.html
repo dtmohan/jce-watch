@@ -316,6 +316,13 @@
         <button id="btnHelio">☉ Heliocentric</button>
       </div>
       <div id="helioNote" style="display:none;font-size:10px;color:var(--ketu);margin-top:6px;font-style:italic;line-height:1.5;">Moon &amp; nodes hidden · Retrograde vanishes</div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button id="btnRosette" title="Accumulate Mercury retrograde trail to show 21-yr rosette closure (§11.3)">☿ Rosette</button>
+      </div>
+      <div id="rosetteNote" style="display:none;font-size:10px;color:var(--gold2);margin-top:6px;font-style:italic;line-height:1.5;">
+        Mercury rosette mode · SR = filled ◆ petal tip · SD = open ◇ petal base<br>
+        Run at 5 yr/s — pattern closes in ~21 sim-yr (§11.3)
+      </div>
     </div>
 
     <!-- Epoch -->
@@ -405,7 +412,7 @@
         <span style="color:var(--ketu)">◆</span> Ketu needle (differential)<br>
         <span style="color:var(--moon)">●</span> Moon · <span style="color:var(--sun)">●</span> Sun<br>
         <span style="color:var(--mercury)">●</span> ☿ · <span style="color:var(--venus)">●</span> ♀ · <span style="color:var(--mars)">●</span> ♂ · <span style="color:var(--jupiter)">●</span> ♃ · <span style="color:var(--saturn)">●</span> ♄<br>
-        <span style="color:var(--ketu)">◌ ℞</span> Retrograde (Ketu zero-crossing)<br>
+        <span style="color:var(--ketu)">◌ ℞</span> Retrograde · <span style="color:var(--mercury)">◆</span> SR petal tip · <span style="color:var(--mercury)">◇</span> SD petal base<br>
         <span style="color:#4CA8C9">━ GC-N</span> Galactic crossing N · 66° (Note 5)<br>
         <span style="color:#C94C6A">━ Node</span> Ecliptic-galactic node · 246.2° (Note 18)<br>
         <span style="color:#E8A0C9">━ Sgr A*</span> Galactic center · 243.0° (Note 18)<br>
@@ -526,6 +533,8 @@ let speedIdx = 3;  // default: 1 day/s (index 3 in new array)
 let lastTime = null;
 let selectedPlanet = null;
 let helioMode = false;
+let rosetteMode = false;  // Mercury rosette accumulation mode (paper §11.3)
+const mercuryRosette = [];  // persistent, never shifted — accumulates all petals
 
 // Nakshatra panel throttle — only re-render when nakshatra changes or fraction moves >0.5%
 let _lastNakName = '';
@@ -589,32 +598,111 @@ function displayAngle(body, days) {
   return siderealMode ? getSiderealAngle(body, days) : getAngle(body, days);
 }
 
-// Heliocentric x,y position (AU) — with equation of centre correction
-// Orbital eccentricities and longitude of perihelion at J2000
+// Heliocentric x,y position (AU) — with equation of centre + secular evolution + GI
+//
+// Orbital elements at J2000.0 (epoch-0 snapshot)
+// e  : eccentricity
+// w  : longitude of perihelion (degrees)
+// dw : secular rate of ω (degrees per Julian century)
+//      Derived from: nodal precession timescales (Note 8) + apsidal precession
+//      from mutual planetary perturbations (same N-body physics as the MST, Note 5)
+//      Mercury largest (high inclination, largest δ from Note 8);
+//      Jupiter smallest (most stable — smallest correction term, Note 8 §5.2)
+// de : secular eccentricity drift per Julian century (significant only for Mars)
+//
+// Note 8 nodal precession periods → Ω̇:  Saturn 36,000yr → −1.00°/cy
+//                                         Mars 171,000yr → −0.21°/cy
+//                                         Jupiter 430,000yr → −0.08°/cy
+// Combined with prograde apsidal precession from MST coupling:
 const ORBITAL = {
-  mercury: { e: 0.20563,  w: 77.4561 },
-  venus:   { e: 0.00677,  w: 131.5637 },
-  earth:   { e: 0.01671,  w: 102.9374 },
-  mars:    { e: 0.09341,  w: 336.0602 },
-  jupiter: { e: 0.04839,  w: 14.7295 },
-  saturn:  { e: 0.05386,  w: 92.4318 },
+  mercury: { e: 0.20563,  w: 77.4561,   dw: 1.91953              },
+  venus:   { e: 0.00677,  w: 131.5637,  dw: 1.39390              },
+  earth:   { e: 0.01671,  w: 102.9374,  dw: 1.71953              },
+  mars:    { e: 0.09341,  w: 336.0602,  dw: 1.84429, de: -0.00013 },
+  jupiter: { e: 0.04839,  w: 14.7295,   dw: 1.23154              },
+  saturn:  { e: 0.05386,  w: 92.4318,   dw: 1.40014              },
 };
 
 function helioXY(key, days) {
-  const o = HELIO[key];
+  const o   = HELIO[key];
   const orb = ORBITAL[key];
-  // Mean longitude → mean anomaly
-  const L = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360;
-  const M = ((L - orb.w) % 360 + 360) % 360;  // mean anomaly (deg)
+  const T   = days / 36525.0;  // Julian centuries since J2000
+
+  // ── 1. Secular element evolution (Note 8: nodal precession drives ω drift)
+  const w_eff = orb.w + orb.dw * T;
+  const e_eff = orb.e + (orb.de || 0) * T;
+
+  // ── 2. Mean longitude → mean anomaly using epoch-correct perihelion
+  const L    = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360;
+  const M    = ((L - w_eff) % 360 + 360) % 360;
   const Mrad = M * DEG;
-  const e = orb.e;
-  // Equation of centre (Meeus, accurate to ~0.01° for most planets)
+  const e    = e_eff;
+
+  // ── 3. Equation of centre (3 terms, accurate to ~0.01° for most planets)
   const eqc = (2*e - e*e*e/4) * Math.sin(Mrad)
-             + (5/4)*e*e * Math.sin(2*Mrad)
-             + (13/12)*e*e*e * Math.sin(3*Mrad);
-  const trueLon = (L + eqc / DEG) * DEG;  // true longitude in radians
-  // True radius vector (AU)
-  const r = o.a * (1 - e*e) / (1 + e * Math.cos(Mrad + eqc));
+            + (5/4)*e*e        * Math.sin(2*Mrad)
+            + (13/12)*e*e*e    * Math.sin(3*Mrad);
+
+  // ── 4. Planetary coupling perturbations — derived from Laplace coefficient
+  //    calibration against the verified GI amplitude (Note 9, 0.06% residual).
+  //
+  //    Formula: amp = C × (m_perturber/m_sun) × b_{3/2}^(1)(alpha) / mst_weight
+  //    Calibration C = 5.485 from GI: 0.812° = C × (m_J/m_sun) × L_JS / w_JS
+  //    where w_JS = |5T_J − 2T_S|/T_S = 0.0134 (5:2 J-S near-resonance)
+  //
+  //    NOTE: The Note 9 GI formula (M_J/M_S) cannot generalise to Mars-Jupiter —
+  //    mass ratio Mars:Jupiter = 2960 vs J-S = 3.34 (900× out of calibration range).
+  //    Laplace coefficient approach is the framework-consistent derivation.
+  //    A proper first-principles note for M-J coupling is the open thread here.
+  //
+  //    Implemented terms (synodic argument = dominant direct coupling per MST):
+  //    ┌──────────────────┬──────┬──────────┬──────────────────────────────────┐
+  //    │ Coupling         │  w   │  amp (°) │  Source                          │
+  //    ├──────────────────┼──────┼──────────┼──────────────────────────────────┤
+  //    │ J→S GI (5:2)    │0.013 │ −0.812   │ Note 9, verified 0.06%           │
+  //    │ S→J (reciprocal)│0.013 │ +0.332   │ Note 9 (M_S/M_J ratio)           │
+  //    │ J→Earth (12:1)  │0.012 │  0.183   │ Laplace, near 12:1 resonance     │
+  //    │ J→Mars (1:6)    │0.049 │  0.073   │ Laplace, MST edge                │
+  //    │ Saturn→Mars     │0.042 │  0.012   │ Laplace (retained but small)     │
+  //    └──────────────────┴──────┴──────────┴──────────────────────────────────┘
+  //    All other couplings < 0.005° — below the Lahiri ayanamsha precision floor.
+
+  // Mean longitudes of coupling partners (needed for resonant arguments)
+  const L_J = ((HELIO.jupiter.L0 + 360 * days / HELIO.jupiter.T) % 360 + 360) % 360;
+  const L_S = ((HELIO.saturn.L0  + 360 * days / HELIO.saturn.T)  % 360 + 360) % 360;
+  const L_E = ((HELIO.earth.L0   + 360 * days / HELIO.earth.T)   % 360 + 360) % 360;
+  const L_M_mean = ((HELIO.mars.L0   + 360 * days / HELIO.mars.T)    % 360 + 360) % 360;
+
+  let giCorr = 0;
+
+  if (key === 'jupiter') {
+    // J-S GI reciprocal (Note 9)
+    const phi_GI = (5 * L_J - 2 * L_S) * DEG;
+    giCorr = 0.332 * Math.sin(phi_GI);
+
+  } else if (key === 'saturn') {
+    // J-S GI dominant (Note 9, verified 0.812°)
+    const phi_GI = (5 * L_J - 2 * L_S) * DEG;
+    giCorr = -0.812 * Math.sin(phi_GI);
+
+  } else if (key === 'earth') {
+    // Earth from Jupiter — near 12:1 resonance (w=0.012, amp=0.183°, period 85.8yr secular)
+    // Synodic argument dominates; Jupiter pulls Earth forward at conjunction (φ=0)
+    const phi_EJ = (L_J - L_E) * DEG;
+    giCorr = 0.183 * Math.sin(phi_EJ);
+
+  } else if (key === 'mars') {
+    // Mars from Jupiter — MST edge (w=0.049, amp=0.073°, synodic period 2.235yr)
+    const phi_MJ = (L_J - L_M_mean) * DEG;
+    // Mars from Saturn — non-MST (amp=0.012°)
+    const phi_MS = (L_S - L_M_mean) * DEG;
+    giCorr = 0.073 * Math.sin(phi_MJ)
+           + 0.012 * Math.sin(phi_MS);
+  }
+
+  // ── 5. True heliocentric longitude and radius
+  const trueLon = (L + eqc / DEG + giCorr) * DEG;
+  const r       = o.a * (1 - e*e) / (1 + e * Math.cos(Mrad + eqc));
   return { x: r * Math.cos(trueLon), y: r * Math.sin(trueLon) };
 }
 
@@ -1038,38 +1126,32 @@ const trails = {};
 let lastTrailDay = null;
 
 // ── Retrograde stamp system
-// Stamps record the midpoint longitude of each retrograde episode
-// prevRetro: was the planet retrograde last sample?
-// retroStart: angle when retrograde began (for midpoint calculation)
-const MAX_STAMPS = 60;  // keep last N stamps per planet
+// Records Station Retrograde (SR) at episode entry and Station Direct (SD) at exit.
+// SR = d(lambda)/dt crosses zero + to - (planet stops, begins retrograde)
+// SD = d(lambda)/dt crosses zero - to + (planet resumes direct motion)
+// Paper 11.2: "each petal tip is a SR; each petal base is a SD"
+// Each stamp: { angle, days, type: 'SR' | 'SD' }
+const MAX_STAMPS = 80;  // per planet (SR + SD pairs, so ~40 episodes)
 const stamps = {};
 const prevRetro = {};
-const retroStartAngle = {};
 ['mercury','venus','mars','jupiter','saturn'].forEach(b => {
-  stamps[b] = [];      // [{angle, days}]
+  stamps[b] = [];
   prevRetro[b] = false;
-  retroStartAngle[b] = null;
 });
 
 function updateStamps(b, days) {
   const r = isRetrograde(b, days);
   if (!prevRetro[b] && r) {
-    retroStartAngle[b] = displayAngle(b, days);
+    // SR: planet just entered retrograde
+    const angle = displayAngle(b, days);
+    stamps[b].push({ angle, days, type: 'SR' });
+    if (stamps[b].length > MAX_STAMPS) stamps[b].shift();
   }
   if (prevRetro[b] && !r) {
-    const endAngle = displayAngle(b, days);
-    const startAngle = retroStartAngle[b];
-    if (startAngle !== null) {
-      // Midpoint: average, handling wrap
-      let mid = (startAngle + endAngle) / 2;
-      // If the retrograde crossed 0°/360°, adjust
-      let diff = endAngle - startAngle;
-      if (diff > 180)  diff -= 360;
-      if (diff < -180) diff += 360;
-      mid = ((startAngle + diff / 2) % 360 + 360) % 360;
-      stamps[b].push({ angle: mid, days });
-      if (stamps[b].length > MAX_STAMPS) stamps[b].shift();
-    }
+    // SD: planet just resumed direct motion
+    const angle = displayAngle(b, days);
+    stamps[b].push({ angle, days, type: 'SD' });
+    if (stamps[b].length > MAX_STAMPS) stamps[b].shift();
   }
   prevRetro[b] = r;
 }
@@ -1581,28 +1663,33 @@ function drawWatch(days) {
   // Stamps only at 1 wk/s and above — accumulate too slowly to matter at lower speeds
   if (speedIdx >= 4) {
 
-  // Venus pentagram lines
-  if (stamps.venus.length >= 2) {
+  // Venus pentagram -- connect consecutive SR stamps across face interior
+  // SR stamps mark where Venus stopped: 5 SR stations per 8-yr cycle form the pentagram
+  {
     const dimVenus = selectedPlanet !== null && selectedPlanet !== 'venus';
-    ctx.save();
-    ctx.globalAlpha = dimVenus ? 0.05 : 0.35;
-    ctx.strokeStyle = COL.venus;
-    ctx.lineWidth = 0.8;
-    ctx.setLineDash([3, 4]);
-    // Connect successive stamps across the face interior
-    for (let i = 1; i < stamps.venus.length; i++) {
-      const p0 = toCanvas(stamps.venus[i-1].angle, ORBITS.venus * 0.55);
-      const p1 = toCanvas(stamps.venus[i].angle,   ORBITS.venus * 0.55);
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      ctx.stroke();
+    const vSR = stamps.venus.filter(s => s.type === 'SR');
+    if (vSR.length >= 2) {
+      ctx.save();
+      ctx.globalAlpha = dimVenus ? 0.05 : 0.35;
+      ctx.strokeStyle = COL.venus;
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([3, 4]);
+      for (let i = 1; i < vSR.length; i++) {
+        const p0 = toCanvas(vSR[i-1].angle, ORBITS.venus * 0.55);
+        const p1 = toCanvas(vSR[i].angle,   ORBITS.venus * 0.55);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
     }
-    ctx.setLineDash([]);
-    ctx.restore();
   }
 
-  // All planets: draw a small tick on the orbit ring at each stamp
+  // All planets: SR = filled diamond (petal tip), SD = open diamond (petal base)
+  // Paper 11.2: SR and SD are Ketu zero-crossing moments — d(lambda)/dt = 0
+  // Paper 11.3: "each petal tip is a SR; each petal base is a SD"
   const stampBodies = ['mercury','venus','mars','jupiter','saturn'];
   stampBodies.forEach(b => {
     if (stamps[b].length === 0) return;
@@ -1614,52 +1701,86 @@ function drawWatch(days) {
     const cb = parseInt(hex.slice(4,6),16);
 
     stamps[b].forEach((s, idx) => {
-      const age = stamps[b].length - 1 - idx;  // 0 = newest
+      const age = stamps[b].length - 1 - idx;
       const ageFrac = age / Math.max(stamps[b].length - 1, 1);
-      const alpha = (1 - ageFrac * 0.7) * (dimmed ? 0.08 : 0.85);
+      const isSR = s.type === 'SR';
+      const baseAlpha = isSR ? 0.90 : 0.55;
+      const alpha = (1 - ageFrac * 0.65) * (dimmed ? 0.07 : baseAlpha);
 
-      // Small diamond on the orbit ring
       const p = toCanvas(s.angle, r);
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.translate(p.x, p.y);
       ctx.rotate((s.angle - 90) * DEG);
 
-      // Diamond shape: 3px × 5px tick pointing radially outward
+      // SR: filled diamond (bright petal tip); SD: open diamond (dim petal base)
+      const h = isSR ? 5 : 3.5;
+      const w = isSR ? 2.5 : 2.0;
       ctx.beginPath();
-      ctx.moveTo(0, -5);
-      ctx.lineTo(2.5, 0);
-      ctx.lineTo(0, 5);
-      ctx.lineTo(-2.5, 0);
+      ctx.moveTo(0, -h);
+      ctx.lineTo(w, 0);
+      ctx.lineTo(0, h);
+      ctx.lineTo(-w, 0);
       ctx.closePath();
-      ctx.fillStyle = `rgba(${cr},${cg},${cb},1)`;
-      ctx.fill();
+      if (isSR) {
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},1)`;
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = `rgba(${cr},${cg},${cb},1)`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
 
-      // For Mercury: also draw the sequence number (mod 3) so you can see
-      // which of the three annual retrogrades this is
-      if (b === 'mercury' && !dimmed && stamps[b].length <= 24) {
-        const seqNum = (idx % 3) + 1;
-        ctx.font = '7px Cinzel, serif';
-        ctx.fillStyle = `rgba(${cr},${cg},${cb},0.9)`;
+      // Mercury: label each stamp SR or SD while rosette builds
+      if (b === 'mercury' && !dimmed && stamps[b].length <= 40) {
+        ctx.font = '6.5px Cinzel, serif';
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},0.85)`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.rotate(-(s.angle - 90) * DEG); // un-rotate for text
-        ctx.fillText(seqNum, 0, -11);
+        ctx.rotate(-(s.angle - 90) * DEG);
+        ctx.fillText(isSR ? 'SR' : 'SD', 0, isSR ? -10 : -9);
       }
 
       ctx.restore();
     });
-
-    // Label the gap for Mercury: draw the ~17° annual precession arc
-    if (b === 'mercury' && stamps.mercury.length >= 4 && !dimmed) {
-      // Find the gap between the last stamp of one year-group and first of next
-      // Approximate: every 3rd stamp pair should show a ~17° gap vs ~114° gaps
-      // Just annotate the latest stamp cluster
-    }
   });
 
   } // end speedIdx >= 4 (stamps)
   } // end !helioMode (stamps)
+
+  // ── Mercury rosette (persistent accumulation, paper §11.3)
+  // Draws all accumulated petals: retrograde arcs in ketu-pink (petal body),
+  // direct arcs faint (connectors between petals). SR/SD stamps mark tips/bases.
+  if (!helioMode && rosetteMode && mercuryRosette.length >= 2) {
+    const dimmed = selectedPlanet !== null && selectedPlanet !== 'mercury';
+    const r = ORBITS.mercury;
+    const hex = COL.mercury.replace('#','');
+    const cr = parseInt(hex.slice(0,2),16);
+    const cg = parseInt(hex.slice(2,4),16);
+    const cb = parseInt(hex.slice(4,6),16);
+    const total = mercuryRosette.length;
+    for (let i = 1; i < total; i++) {
+      const p0 = toCanvas(mercuryRosette[i-1].angle, r);
+      const p1 = toCanvas(mercuryRosette[i].angle, r);
+      const isR = mercuryRosette[i].retro;
+      // Age fade: older petals slightly dimmer so newest petal stands out
+      const ageFrac = i / total;
+      const baseA = 0.15 + ageFrac * 0.55;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      if (isR) {
+        // Retrograde arc = petal body — ketu-pink, brighter
+        ctx.strokeStyle = `rgba(220,80,120,${dimmed ? 0.05 : baseA * 1.3})`;
+        ctx.lineWidth = dimmed ? 0.5 : 1.8;
+      } else {
+        // Direct arc = inter-petal connector — planet color, faint
+        ctx.strokeStyle = `rgba(${cr},${cg},${cb},${dimmed ? 0.03 : baseA * 0.35})`;
+        ctx.lineWidth = dimmed ? 0.3 : 0.8;
+      }
+      ctx.stroke();
+    }
+  }
 
   // ── Planetary trails (geocentric only, 1 day/s and above)
   if (!helioMode && speedIdx >= 3) {
@@ -2129,6 +2250,12 @@ function loop(ts) {
         if (trails[b].length > TRAIL_LEN) trails[b].shift();
         updateStamps(b, d);
       });
+      // Rosette accumulator — Mercury only, persistent (no length cap)
+      if (rosetteMode) {
+        const angle = displayAngle('mercury', d);
+        const retro = isRetrograde('mercury', d);
+        mercuryRosette.push({ angle, retro });
+      }
     }
     lastTrailDay = simDays;
   }
@@ -2169,8 +2296,8 @@ document.getElementById('btnReset').addEventListener('click', () => {
   simDays = EPOCH_DAYS;
   playing = false;
   lastTrailDay = null;
-  Object.keys(trails).forEach(b => { trails[b] = []; });
-  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnPause').classList.add('active');
   document.getElementById('btnPlay').classList.remove('active');
 });
@@ -2180,8 +2307,8 @@ document.getElementById('btnSetNow').addEventListener('click', () => {
   simDays = dateToDays(new Date());
   playing = false;
   lastTrailDay = null;
-  Object.keys(trails).forEach(b => { trails[b] = []; });
-  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnPause').classList.add('active');
   document.getElementById('btnPlay').classList.remove('active');
   drawWatch(simDays);
@@ -2305,8 +2432,8 @@ function updateFocusUI() {
 document.getElementById('btnGeo').addEventListener('click', () => {
   helioMode = false;
   lastTrailDay = null;
-  Object.keys(trails).forEach(b => { trails[b] = []; });
-  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnGeo').classList.add('active');
   document.getElementById('btnHelio').classList.remove('active');
   document.getElementById('helioNote').style.display = 'none';
@@ -2316,8 +2443,27 @@ document.getElementById('btnHelio').addEventListener('click', () => {
   helioMode = true;
   selectedPlanet = null;
   lastTrailDay = null;
-  Object.keys(trails).forEach(b => { trails[b] = []; });
-  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
+
+document.getElementById('btnRosette').addEventListener('click', () => {
+  rosetteMode = !rosetteMode;
+  document.getElementById('btnRosette').classList.toggle('active', rosetteMode);
+  document.getElementById('rosetteNote').style.display = rosetteMode ? 'block' : 'none';
+  if (rosetteMode) {
+    // Paper says "running at 5 yr/s" — auto-set to 5yr/s (index 8) if below
+    if (speedIdx < 8) { speedIdx = 8; document.getElementById('speedRange').value = 8; updateSpeedLabel(); }
+    if (!playing) {
+      playing = true;
+      document.getElementById('btnPause').classList.remove('active');
+      document.getElementById('btnPlay').classList.add('active');
+    }
+  } else {
+    // Clear rosette when toggling off
+    mercuryRosette.length = 0;
+  }
+});
+
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnHelio').classList.add('active');
   document.getElementById('btnGeo').classList.remove('active');
   document.getElementById('helioNote').style.display = 'block';
@@ -2327,8 +2473,8 @@ document.getElementById('btnHelio').addEventListener('click', () => {
 document.getElementById('btnSidereal').addEventListener('click', () => {
   siderealMode = true;
   lastTrailDay = null;
-  Object.keys(trails).forEach(b => { trails[b] = []; });
-  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnSidereal').classList.add('active');
   document.getElementById('btnTropical').classList.remove('active');
 });
@@ -2336,8 +2482,8 @@ document.getElementById('btnSidereal').addEventListener('click', () => {
 document.getElementById('btnTropical').addEventListener('click', () => {
   siderealMode = false;
   lastTrailDay = null;
-  Object.keys(trails).forEach(b => { trails[b] = []; });
-  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; retroStartAngle[b] = null; });
+  Object.keys(trails).forEach(b => { trails[b] = []; }); mercuryRosette.length = 0;
+  Object.keys(stamps).forEach(b => { stamps[b] = []; prevRetro[b] = false; });
   document.getElementById('btnTropical').classList.add('active');
   document.getElementById('btnSidereal').classList.remove('active');
 });
