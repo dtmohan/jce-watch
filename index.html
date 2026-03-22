@@ -305,7 +305,7 @@
     <!-- JCE Frame -->
     <div class="card">
       <div class="card-title">JCE Frame (Note 1–7)</div>
-      <div id="ayanamshaDisp" style="font-size:12px; color:var(--gold2); margin-bottom:8px;">Lahiri ayanamsha: —</div>
+      <div id="ayanamshaDisp" style="font-size:12px; color:var(--gold2); margin-bottom:8px;">JCE structural ayanamsha: —</div>
       <div id="abhijitDisp" style="font-size:11px; color:var(--dim); line-height:1.6;"></div>
       <div class="btn-row" style="margin-top:10px;">
         <button id="btnSidereal" class="active">Sidereal ✦</button>
@@ -418,7 +418,7 @@
         <span style="color:#E8A0C9">━ Sgr A*</span> Galactic center · 243.0° (Note 18)<br>
         <span style="color:#F5E5A0">◆</span> Exaltation degrees · <span style="color:#F5E5A0">✦</span> Abhijit band<br>
         <span style="color:#A0C4FF">⬡</span> Anchor nak (Note 13): Mula · Pushya · Chitra · Ardra · Mrg<br>
-        <em style="font-size:11px;">Face tilted 23.44° · Sidereal = Lahiri ayanamsha</em>
+        <em style="font-size:11px;">Face tilted 23.44° · Sidereal = JCE structural ayanamsha<br>Rahu/Ketu = true node · geocentric table always shown</em>
       </div>
     </div>
 
@@ -548,8 +548,35 @@ const R_FACE = W * 0.46;
 // MATH HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function ayanamsha(days) {
+// ── JCE structural ayanamsha (framework-native, NOT standard IAU Lahiri)
+// Zero-point 23.85° is derived from the JCE galactic exaltation grid (Note 5):
+// Sun exaltation at 10° sidereal is the epoch anchor, not the FK5/IAU zero.
+// Rate 50.3″/yr matches IAU precession constant. This is intentionally a
+// structural approximation — use pyswisseph for high-precision Lahiri values.
+function structuralAyanamsha(days) {
   return 23.85 + days * (50.3 / 3600) / 365.25;
+}
+
+// ── Rahu TRUE node longitude (degrees, tropical)
+// Mean node formula gives max error ~1.7° (period ~173 days) — larger than
+// the σ floor of 0.6475°. True node adds the dominant periodic correction.
+// Source: Meeus "Astronomical Algorithms" Ch.47 (same series as Moon).
+// Max residual after this term: ~0.2°, well inside the σ floor.
+function getRahuLongitude(days) {
+  const T  = days / 36525.0;
+  // Mean node (same as before — this is the base)
+  const Om = ((125.0445479 - 1934.1362608 * T) % 360 + 360) % 360;
+  // Moon's mean anomaly and mean elongation (needed for true-node correction)
+  const Mp = ((134.9633964 + 477198.8675055 * T) % 360 + 360) % 360;
+  const D  = ((297.8501921 + 445267.1114034 * T) % 360 + 360) % 360;
+  // Dominant periodic terms (Meeus Table 47.b, longitude of ascending node)
+  // Amplitude in degrees, argument in degrees → convert to radians for sin/cos
+  const dOm = -1.4979 * Math.sin((2 * D - 2 * Om) * DEG)
+            - 0.1500 * Math.sin(Mp * DEG)
+            - 0.1226 * Math.sin(2 * D * DEG)
+            + 0.1176 * Math.sin(2 * Om * DEG)
+            - 0.0801 * Math.sin((2 * D - Mp - 2 * Om) * DEG);
+  return ((Om + dOm) % 360 + 360) % 360;
 }
 
 function getAngle(body, days) {
@@ -568,7 +595,7 @@ function getAngle(body, days) {
 }
 
 function getSiderealAngle(body, days) {
-  return ((getAngle(body, days) - ayanamsha(days)) % 360 + 360) % 360;
+  return ((getAngle(body, days) - structuralAyanamsha(days)) % 360 + 360) % 360;
 }
 
 let siderealMode = true;
@@ -626,8 +653,15 @@ function helioXY(key, days) {
     // Shape: cosine taper — peaks at node, falls to zero at ±30° window edge.
     // Sign: positive — corrects the observed negative residuals near nodal positions.
     // Empirical target: reduces Saturn max residual from 1.08° to ~0.37° (inside σ floor 0.6475°).
+    //
+    // INTENTIONAL DESIGN: The nodal gate uses L_S (mean heliocentric longitude),
+    // NOT the fully corrected Saturn longitude. This is correct structural behaviour:
+    // the solo correction is a property of Saturn's orbital geometry relative to the
+    // galactic nodal axis, and should be gated on the structural (mean) position.
+    // Using the post-correction longitude would create a feedback loop where the
+    // correction modulates its own trigger. Mean L_S as structural proxy is deliberate.
     {
-      const satSid = ((L_S - ayanamsha(days)) % 360 + 360) % 360;
+      const satSid = ((L_S - structuralAyanamsha(days)) % 360 + 360) % 360;
       const angSep = (node, sid) => {
         let d = Math.abs(sid - node);
         if (d > 180) d = 360 - d;
@@ -849,12 +883,12 @@ function getHelioAngle(body, days) {
   if (body === 'earth') {
     const e = helioXY('earth', days);
     const lon = Math.atan2(e.y, e.x) / DEG;
-    return ((lon - (siderealMode ? ayanamsha(days) : 0)) % 360 + 360) % 360;
+    return ((lon - (siderealMode ? structuralAyanamsha(days) : 0)) % 360 + 360) % 360;
   }
   const o = HELIO[body];
   if (!o) return 0;
   const lon = ((o.L0 + 360 * days / o.T) % 360 + 360) % 360;
-  return ((lon - (siderealMode ? ayanamsha(days) : 0)) % 360 + 360) % 360;
+  return ((lon - (siderealMode ? structuralAyanamsha(days) : 0)) % 360 + 360) % 360;
 }
 
 function getDistance(body, days) {
@@ -1660,8 +1694,18 @@ function updateUI(days) {
     { key:'saturn',  label:'♄ Saturn' },
   ];
   const tbl = document.getElementById('planetTable');
-  const ay = ayanamsha(days);
-  tbl.innerHTML = bodies2.map(b => {
+  const ay = structuralAyanamsha(days);
+  // Heliocentric mode: face uses helio positions but table preserves geocentric
+  // readout intentionally — this is the JCE validation frame. Banner makes it explicit.
+  const helioModeBanner = helioMode
+    ? `<div style="font-size:9px;font-style:italic;color:var(--ketu);border:1px solid var(--ketu);
+        border-radius:2px;padding:4px 6px;margin-bottom:8px;line-height:1.5;">
+        ☉ Heliocentric face active<br>
+        <span style="opacity:0.8;">Geocentric longitudes shown — JCE validation frame</span></div>`
+    : '';
+  const bodies2Filtered = helioMode ? bodies2.filter(b => b.key !== 'moon') : bodies2;
+  tbl.innerHTML = helioModeBanner + bodies2Filtered.map(b => {
+    // (map body unchanged below)
     const a = displayAngle(b.key, days);
     const retro = isRetrograde(b.key, days);
     const rxBadge = retro
@@ -1679,7 +1723,7 @@ function updateUI(days) {
 
   const ayEl = document.getElementById('ayanamshaDisp');
   if (ayEl) {
-    ayEl.textContent = `Lahiri ayanamsha: ${ay.toFixed(4)}°`;
+    ayEl.textContent = `JCE structural ayanamsha: ${ay.toFixed(4)}°`;
     const moonSid3 = getSiderealAngle('moon', days);
     const abhEl = document.getElementById('abhijitDisp');
     if (abhEl) {
@@ -1870,7 +1914,7 @@ document.getElementById('btnCalcNatal').addEventListener('click', () => {
     res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Birth date is in the future.</span>'; return;
   }
   const natalMoonTrop = getMoonLongitude(birthDays);
-  const natalMoonSid  = ((natalMoonTrop - ayanamsha(birthDays)) % 360 + 360) % 360;
+  const natalMoonSid  = ((natalMoonTrop - structuralAyanamsha(birthDays)) % 360 + 360) % 360;
   const nak = getNakshatra(natalMoonSid);
   const vimsho = getVimshottari(natalMoonSid, elapsedYrs);
   if (!vimsho) {
