@@ -5,7 +5,7 @@ for Planetary Timekeepers* (Mohan, 2026)
 **doi:** 10.5281/zenodo.19153008  
 **ORCID:** 0000-0001-8054-2085  
 **Simulation:** https://dtmohan.github.io/jce-watch/  
-**Code version:** v7 (March 2026)  
+**Code version:** v8 (March 2026)  
 **Last updated:** March 2026  
 **Audited by:** ChatGPT (independent), daily comparison against Swiss Ephemeris
 true node, 2000-01-01 through 2026-03-22, structural ayanamsha applied on both sides.
@@ -27,42 +27,37 @@ true node, 2000-01-01 through 2026-03-22, structural ayanamsha applied on both s
 **The framework sigma floor is 0.6475°** — σ² = sin²(obliquity)/(α−1)², Notes 2/3/4.
 
 **Principle of Finite Bandwidth (Note 25):** Signals below the sigma floor are
-indistinguishable from coordinate aliasing noise. Truncation at the floor is
-correct physics, not approximation.
+indistinguishable from coordinate aliasing noise.
 
 ---
 
-## v7 Audit Results (confirmed)
+## v8 Audit Results (confirmed)
 
 Independent audit: ChatGPT, daily absolute sidereal longitude error vs Swiss
-Ephemeris, 2000-01-01 through 2026-03-22, structural ayanamsha on both sides.
-Source: raw index.html from GitHub main branch.
+Ephemeris true node, 2000-01-01 through 2026-03-22, structural ayanamsha on both sides.
 
-| Body | Max error | Mean error | Status | Code version |
-|------|-----------|------------|--------|--------------|
-| Sun | 0.374° | 0.178° | ✓ Inside floor | v7/v8 |
-| Moon | 0.616° | 0.142° | ✓ Inside floor | v7 (A4 fix) |
-| Mercury | 0.630° | 0.190° | ✓ Inside floor | v7/v8 |
-| Venus | 0.499° | 0.180° | ✓ Inside floor | v7/v8 |
-| Mars | 0.386° | 0.158° | ✓ Inside floor | v7/v8 |
-| Jupiter | 0.729° | 0.249° | ✗ Outside (0.054° over) | v7/v8 |
-| Saturn | ~0.700°* | ~0.35°* | ✗ Outside (0.054° over, predicted) | v8 — solo disabled |
-| Rahu | 3.321° | 1.203° | ✗ Outside — see diagnosis | v7/v8 |
+| Body | Max error | Mean error | Status |
+|------|-----------|------------|--------|
+| Sun | 0.374° | 0.178° | ✓ Inside floor |
+| Moon | 0.616° | 0.142° | ✓ Inside floor |
+| Mercury | 0.630° | 0.190° | ✓ Inside floor |
+| Venus | 0.499° | 0.180° | ✓ Inside floor |
+| Mars | 0.386° | 0.158° | ✓ Inside floor |
+| Jupiter | 0.729° | 0.249° | ✗ Outside (0.054° over) |
+| Saturn | 1.142° | 0.535° | ✗ Outside — structural (see §Saturn) |
+| Rahu | 3.321° | 1.203° | ✗ Outside — under investigation (see §Rahu) |
 
-*Saturn v8 prediction: solo correction disabled. Based on audit decomposition showing
-base+GI alone = 0.697° at max-error date (2004-03-23). Not yet re-audited.
-
-**Accurate public claim (v7):**
-> The v7 engine stays inside the sigma floor (0.6475°) for Sun, Moon, Mercury,
+**Accurate public claim (v8):**
+> The v8 engine stays inside the sigma floor (0.6475°) for Sun, Moon, Mercury,
 > Venus, and Mars over the 2000–2026 audit window. Jupiter is marginally above
-> the floor (0.054°). Saturn and Rahu are open correction branches.
+> the floor (0.054°). Saturn has a structural GI-amplitude limitation. Rahu is
+> under investigation pending SE methodology clarification.
 
-The blanket "all bodies inside floor" claim does not hold. This table is the
-honest statement of current state.
+---
 
-**Progress across versions:**
+## Progress across versions
 
-| Body | GitHub old | v6 | v7 | v8 |
+| Body | Old GitHub | v6 | v7 | v8 |
 |------|-----------|----|----|-----|
 | Sun | 0.533° ✓ | 0.374° ✓ | 0.374° ✓ | 0.374° ✓ |
 | Moon | 0.082° ✓ | 0.750° ✗ | 0.616° ✓ | 0.616° ✓ |
@@ -70,87 +65,107 @@ honest statement of current state.
 | Venus | 1.001° ✗ | 0.499° ✓ | 0.499° ✓ | 0.499° ✓ |
 | Mars | 0.423° ✓ | 0.386° ✓ | 0.386° ✓ | 0.386° ✓ |
 | Jupiter | 0.710° ✗ | 0.729° ✗ | 0.729° ✗ | 0.729° ✗ |
-| Saturn | 1.297° ✗ | 1.296° ✗ | 1.296° ✗ | ~0.700°* ✗ |
+| Saturn | 1.297° ✗ | 1.296° ✗ | 1.296° ✗ | 1.142° ✗ |
 | Rahu | 3.476° ✗ | 3.321° ✗ | 3.321° ✗ | 3.321° ✗ |
 
-Old = pre-session GitHub code (v3/v4 state).
-V6 = CP truncation of sub-floor couplings, Note 25 Moon/Rahu.
-V7 = Moon A4 term added — Moon inside floor.
-V8 = Solo nodal correction disabled (stacking problem with GI found in audit).
-*v8 Saturn not yet re-audited — predicted from decomposition at 2004-03-23.
+Old = pre-session state. V6 = CP truncation, Note 25 Moon/Rahu.
+V7 = Moon A4 fix (Moon inside floor). V8 = solo nodal disabled.
 
 ---
 
-## Diagnoses for remaining failures
+## Diagnoses
 
 ### Jupiter 0.729° (0.054° over floor)
-- dw/dt accumulation over 26yr: 0.320°
-- S→J GI correction implemented (+0.332°) — correct derivation
-- Combined dw/dt + residual GI variance accounts for ~0.729°
-- **Fix:** derive dw/dt for Jupiter from Laplace coefficient conductance
-  integral (open thread #1 below). Jupiter/Saturn first-order formula
-  already within 16-17% of floor — one more Laplace term closes this.
+dw/dt contribution (1.23154°/cy over 26yr) = 0.320°. S→J GI (+0.332°)
+implemented. The combination of dw/dt accumulation and residual GI variance
+produces the 0.054° overshoot. Fix: derive dw/dt from Laplace coefficient
+conductance integral (open thread #1).
 
-### Saturn ~0.700° predicted (v8, solo disabled)
+### Saturn 1.142° — structural GI amplitude limitation
 
-**Audit decomposition at 2004-03-23 (max-error date):**
+**Audit decomposition at 2025-08-23 (v8 max-error date):**
 
 | Component | Value | Error vs SE |
 |-----------|-------|-------------|
-| SE sidereal Saturn | 72.6093° | — |
-| Base Keplerian only | 72.5393° | +0.070° |
-| Base + GI only | 73.3059° | +0.697° |
-| Base + solo only | 73.1381° | +0.529° |
-| Base + GI + solo (v7) | 73.9056° | +1.296° |
+| SE sidereal Saturn | 336.403° | — |
+| Base Keplerian | ~336.15° | -0.253° |
+| Base + GI (v8) | 335.261° | -1.142° |
 
-**Finding:** the base engine is correct (0.070°). The GI correction alone puts
-Saturn at +0.697° (just above floor). The solo correction (+0.595° at this date)
-stacks in the same direction instead of compensating.
+GI contribution at this date: -0.889° — pushing Saturn further behind SE
+when the base is already behind by 0.253°.
 
-**Root cause:** the solo correction was calibrated against raw residuals BEFORE
-the GI was applied. Applied AFTER the GI, it double-counts near nodes where the
-GI already overshoots. At 2004-03-23, Saturn is 11.22° from the ascending node
-(89° sidereal), deep in the 30° activation window.
+**Root cause — structural, not a code error:**
 
-**v8 fix:** solo correction disabled. Saturn max error predicted ~0.700°
-(base + GI only), still 0.054° above floor — same margin as Jupiter.
+The GI amplitude (0.812°) exceeds the sigma floor (0.6475°) by 0.165°. When
+the GI fires in the wrong direction relative to the base residual — which
+happens at certain resonance phases in the ~2.8-year GI argument cycle — a
+floor violation is mathematically unavoidable:
 
-**Next fix:** derive the solo correction sign and amplitude from the full
-residual AFTER GI using the Note 24 conductance model. The correction should
-oppose the GI overshoot near nodes, not reinforce it.
-Resume: "derive Saturn solo nodal correction sign from full residual after GI
-— Note 24 §8 formal derivation, sign determined by post-GI residual not raw" 
+    Total error = base_error + GI_amplitude = 0.253 + 0.812 = 1.065°
 
-### Rahu 3.321°
-- Error with 5-term Meeus: 3.476°. Error with 1-term JCE: 3.321°.
-  Difference: only 0.155° — far less than the 0.470° expected from
-  removing four below-floor correction terms.
-- **Conclusion:** the ~3° error is NOT from the correction terms.
-  It is in the BASE computation — systematic, not random.
-- Mean node rate is 0.053°/day. A 3° systematic offset = 57 days of
-  mean node motion. This is not a precision error.
-- **Most likely cause:** Swiss Ephemeris node calculation uses
-  osculating elements (SEFLG_TRUEPOS or similar), which can deviate
-  from the mean node by ±10° or more. SE flag 11 (SE_TRUE_NODE) gives
-  the standard true node (±1.5° from mean); any osculating flag gives
-  a different quantity entirely.
-- **Critical open question before any Rahu code change:**
-  What `swe_calc()` flag was used for the node in the audit?
-  - `SE_TRUE_NODE` (flag 11): true node, ±1.5° from mean → 3.3° is unexplained code error
-  - `SE_MEAN_NODE` (flag 10): mean node → our formula should match closely
-  - Any osculating flag: 3.3° is expected and is NOT a code error
-- **Ask auditor:** which SE flag was used for Rahu/node calculation?
+This is not fixable by adjusting the formula. The GI amplitude is formally
+derived in Note 9 with 0.06% residual — it should not be changed. The GI
+argument uses mean longitudes; switching to true longitudes reduces the
+2025-08-23 error from 1.142° to ~0.820° but makes the 2004-03-23 case worse
+(0.873° instead of 0.697°). Neither formula choice eliminates the structural
+violation.
+
+**What would actually fix Saturn:**
+A more complete Note 9 perturbation expansion that correctly predicts the
+GI phase at each epoch, not just the amplitude. The current formula captures
+the amplitude (0.812°, verified) but treats the argument as a pure mean-longitude
+expression. A full secular perturbation treatment would give the correct phase
+contribution from Jupiter and Saturn's mutual interactions.
+
+**Current state:** Saturn has a documented structural GI-amplitude limitation.
+Max error reduced from 1.296° (v7, stacking with solo) to 1.142° (v8, solo
+disabled). Further improvement requires Note 9 extension.
+
+Previous v7 max-error point (2004-03-23):
+- Base: 0.070°, GI: +0.761°, Solo: +0.595° → total 1.296° (solo stacking with GI)
+- Solo correction was calibrated against raw residuals before GI was applied,
+  causing double-counting near the ascending node. Disabled in v8.
+
+### Rahu 3.321° — methodology investigation pending
+
+**Key diagnostic:** error is identical in magnitude whether using 5-term Meeus
+(3.476°) or 1-term JCE conductance derivation (3.321°). The difference (0.155°)
+is far smaller than expected (0.470°) from removing four correction terms.
+This confirms the ~3° error is in the BASE mean node computation, not the
+correction terms.
+
+**Confirmed:** SE used SE_TRUE_NODE flag (not osculating). The large error is real
+and is not a methodology artifact.
+
+**Spot-check values** (ask SE to compare against these exact tropical outputs):
+
+| Date | JCE tropical | JCE sidereal | Ayanamsha |
+|------|-------------|-------------|-----------|
+| 2000-01-01 | 125.4016° | 101.5516° | 23.8500° |
+| 2003-01-01 | 66.9625° | 43.0705° | 23.8919° |
+| 2006-07-01 | 358.1931° | 334.2523° | 23.9408° |
+| 2010-01-01 | 290.8246° | 266.8349° | 23.9897° |
+| 2013-06-01 | 224.2196° | 200.1822° | 24.0374° |
+| 2017-01-01 | 154.9292° | 130.8417° | 24.0875° |
+| 2020-06-01 | 88.8344° | 64.6991° | 24.1353° |
+| 2024-01-01 | 19.4283° | 355.2430° | 24.1853° |
+| 2026-03-22 | 337.2442° | 313.0278° | 24.2164° |
+
+**Confirm:** did audit subtract structuralAyanamsha from SE tropical node, or use
+SE's built-in Lahiri sidereal output? The distinction matters for isolating
+whether the error is in the ayanamsha treatment or the mean node formula.
 
 ---
 
-## Dependency map (v7)
+## Dependency map (v8)
 
 | Category | Components |
 |----------|-----------|
-| **JCE-native** | GI J→S (Note 9), Saturn solo nodal (Note 24), Moon 4-term (Note 25+v7), Rahu 1-term (Note 25), structural ayanamsha (Note 13), galactic markers, Abhijit, Vimshottari |
-| **CP-truncated** | J→Earth (0.183°), J→Mars (0.073°), S→Mars (0.012°) — all below sigma floor |
+| **JCE-native** | GI J→S (Note 9), Moon 4-term (Note 25+v7), Rahu 1-term (Note 25), structural ayanamsha (Note 13), galactic markers, Abhijit, Vimshottari |
+| **Disabled (v8)** | Saturn solo nodal — stacks with GI incorrectly; requires Note 24 formal derivation of post-GI sign |
+| **CP-truncated** | J→Earth (0.183°), J→Mars (0.073°), S→Mars (0.012°) |
 | **Empirical BCs** | Epoch elements at J2000; dw/dt apsidal rates (6 planets); mass ratios; Mars de/dt |
-| **Audit oracle** | Swiss Ephemeris / pyswisseph |
+| **Audit oracle** | Swiss Ephemeris (SE_TRUE_NODE) / pyswisseph |
 
 ---
 
@@ -163,18 +178,18 @@ Resume: "derive Saturn solo nodal correction sign from full residual after GI
 | Mean motion | ✓ Exact | Period T from observation |
 | Epoch elements at J2000 | ⚠ Empirical BC | Initial conditions |
 | Equation of centre (3-term) | ✓ Verified | ~0.01° for e < 0.1 |
-| Secular dw/dt (6 planets) | ⚠ Empirical BC | NOT from Note 8 (Note 8 = nodal; apsidal is different). Inside sigma floor over ±34yr. Contributes to Jupiter/Saturn failures. Open thread: derive from conductance integral. |
+| Secular dw/dt (6 planets) | ⚠ Empirical BC | Lagrange-Laplace. Inside floor over ±34yr. Contributes to Jupiter failure. Open: derive from conductance integral. |
 | Mars de/dt | ⚠ Empirical BC | -0.00013/cy |
 | Geocentric conversion | ✓ Exact | Full vector subtraction |
-| Structural ayanamsha | ✓ Derived | Note 13. 23.85° at J2000, rate 50.3"/yr. |
+| Structural ayanamsha | ✓ Derived | Note 13. 23.85° at J2000. |
 
 ### Perturbation corrections
 
-| Coupling | Amplitude | Status | Audit |
+| Coupling | Amplitude | Status | Notes |
 |----------|-----------|--------|-------|
-| J→S GI (5:2) | -0.812° | ✓ Derived | Note 9, 1.25x floor |
-| S→J GI (5:2) | +0.332° | ✓ Derived | Note 9, 0.51x floor |
-| Saturn solo nodal | ±0.714° | ~ Approximate | Note 24 candidate. Saturn 1.296° — location of max unknown. |
+| J→S GI (5:2) | -0.812° | ✓ Derived | Note 9. 0.812° > σ floor — structural Saturn limitation. |
+| S→J GI (5:2) | +0.332° | ✓ Derived | Note 9 |
+| Saturn solo nodal | 0° | ✗ Disabled v8 | Was stacking with GI. Requires Note 24 formal derivation with post-GI residual sign. |
 | J→Earth | 0° | ∅ CP-truncated | 0.183° below floor |
 | J→Mars | 0° | ∅ CP-truncated | 0.073° below floor |
 | S→Mars | 0° | ∅ CP-truncated | 0.012° below floor |
@@ -185,14 +200,12 @@ Resume: "derive Saturn solo nodal correction sign from full residual after GI
 
 | Component | Status | Detail |
 |-----------|--------|--------|
-| Mean elements | ⚠ Empirical BC | Best observed rates at J2000 |
 | A1 = 6.2887° sin(Mp) | ✓ Derived | (2e_M − e_M³/4)×(180/π) |
 | A2 = 1.2740° sin(2D−Mp) | ⚠ Empirical BC | Evection — nakshatra observation |
-| A3 = 0.6583° sin(2D) | ⚠ Empirical BC | Variation — nakshatra observation |
-| A4 = 0.2136° sin(2Mp) | ⚠ Empirical BC | **Added v7.** 2nd apsidal harmonic. Was incorrectly omitted in v5/v6, causing the worst-case error budget to be stated as 0.580° when the correct value is 0.648°. |
-| Terms 5-15 (11 terms) | ∅ CP-truncated | Worst case ≤ 0.648° — inside sigma floor ✓ |
-| Abhijit | ✓ Exact | getNakshatra()/getVimshottari(), 4.222°, winding 22,500 |
-| Audit result (v7) | **0.616°** | **INSIDE sigma floor ✓** |
+| A3 = 0.6583° sin(2D) | ⚠ Empirical BC | Variation — triad conductance deferred |
+| A4 = 0.2136° sin(2Mp) | ⚠ Empirical BC | Added v7 — 2nd apsidal harmonic |
+| Terms 5-15 | ∅ CP-truncated | Worst case ≤ 0.648° — inside floor ✓ |
+| Audit result | **0.616°** | **Inside floor ✓** |
 
 ---
 
@@ -201,10 +214,10 @@ Resume: "derive Saturn solo nodal correction sign from full residual after GI
 | Component | Status | Detail |
 |-----------|--------|--------|
 | Mean node | ⚠ Empirical BC | 125.0445479 − 1934.1362608×T |
-| Dominant term | ✓ Derived | 1.4368° sin(2D−2Ω) from conductance integral |
-| Argument 2D−2Ω | ✓ Derived | From T_M, T_S, T_N period ratios |
+| Dominant term | ✓ Derived | 1.4368° sin(2D−2Ω) |
+| Argument | ✓ Derived | From T_M, T_S, T_N period ratios |
 | Terms 2-5 | ∅ CP-truncated | Sum 0.470° — inside floor |
-| Audit result | 3.321° | **Methodology question open.** Error identical in magnitude to 5-term Meeus version — not from correction terms. Need SE node flag confirmation. |
+| Audit result | 3.321° | Under investigation — see §Rahu above |
 
 ---
 
@@ -212,25 +225,22 @@ Resume: "derive Saturn solo nodal correction sign from full residual after GI
 
 | Constant | Value | Status |
 |----------|-------|--------|
-| sigma floor | 0.6475° | ✓ Exact (Notes 2/3/4) |
-| alpha | 15.4002 | ✓ Exact |
+| σ floor | 0.6475° | ✓ Exact (Notes 2/3/4) |
+| α | 15.4002 | ✓ Exact |
 | GI period | 925.71 yr | ✓ Exact (T3/28, Note 9) |
-| GI amplitude | 0.8119° | ✓ Verified 0.06% |
+| GI amplitude | 0.8119° | ✓ Verified 0.06% — exceeds floor by 0.165° |
 | Abhijit span | 4.222° | ✓ Exact |
 | Winding number | 22,500 | ✓ Integer-exact |
 | Obliquity | 23.4392911° | ⚠ Empirical BC |
 | GC-N crossing | 66.0° sidereal | ✓ Verified (Note 5) |
 | Ecliptic-galactic node | 246.2° sidereal | ✓ Verified (Note 18) |
 | Sgr A* direction | 243.0° sidereal | ✓ Verified (Note 18) |
-| Node−Sgr A* gap | 3.196° | ✓ Exact (obliquity × 3/22, Note 18) |
+| Node−Sgr A* gap | 3.196° | ✓ Exact (Note 18) |
 | Structural ayanamsha | ~23.85° at J2000 | ✓ Verified (Note 13) |
-| Saturn Ω_S ascending | ~89° sidereal | ✓ Verified (Note 5) |
-| Saturn Ω_S descending | ~269° sidereal | ✓ Verified (Note 5) |
-| Rahu derived amplitude | 1.4368° | ✓ Derived (Note 25) |
 
 ---
 
-## Gear ratios (paper Appendix A, v4)
+## Gear ratios (paper Appendix A)
 
 | Body | Ratio | ppm | Status |
 |------|-------|-----|--------|
@@ -245,33 +255,37 @@ Resume: "derive Saturn solo nodal correction sign from full residual after GI
 
 ## Open threads (priority order)
 
-**0. Resolve audit methodology for Rahu (before any code change)**
-Ask auditor: which `swe_calc()` flag was used for the node?
-`SE_TRUE_NODE` (11) vs osculating flag changes the interpretation entirely.
-Ask auditor: date and Saturn sidereal longitude at max error (1.296°).
+**0. Resolve Rahu spot-check**
+Ask SE auditor: for the nine dates in §Rahu, compare SE tropical true-node
+values against our JCE tropical values. Identify whether error is in mean
+node formula, ayanamsha treatment, or audit pipeline.
 
-**1. dw/dt apsidal rates from conductance integral (6 planets)**
-Fixes Jupiter (0.729° → inside floor) and likely Saturn.
-First-order Laplace coefficient already correct for Jupiter/Saturn (~17%).
-Inner planets need higher-order terms.
-Resume: "derive apsidal precession dw/dt from Laplace coefficient
-conductance integral — extend Note 9 GI structure to each MST dyad pair"
+**1. dw/dt apsidal rates from conductance integral**
+Fixes Jupiter (0.729° → inside floor). Same Laplace coefficient structure
+as GI and Rahu. First-order already correct for Jupiter/Saturn (~17%).
+Resume: "derive apsidal dw/dt from Laplace coefficient conductance integral"
 
-**2. Saturn max error location**
-Once audit supplies date/longitude, determine fix: solo correction
-sign/amplitude (if near nodes) or dw/dt derivation (if away).
+**2. Saturn GI phase accuracy (Note 9 extension)**
+The GI amplitude (0.812°) exceeds the sigma floor. Floor violations are
+structurally unavoidable when GI fires in the wrong direction. Fix requires
+a full Note 9 perturbation expansion giving correct GI phase at each epoch,
+not just amplitude. Saturn cannot be brought inside the floor without this.
+Resume: "extend Note 9 GI derivation to include phase calibration from
+full secular J-S perturbation — amplitude correct, phase needs epoch term"
 
-**3. Saturn solo nodal formal derivation (Note 24 §8)**
-Candidate 0.714° — formal derivation from Note 8 §4 deferred.
-Resume: "resume JCE note 24 solo Saturn correction derivation"
+**3. Saturn solo nodal re-derivation (Note 24 §8)**
+Solo disabled because it was stacking with GI. Correct derivation must:
+(a) derive amplitude from post-GI residual, not raw residual
+(b) determine correct sign relative to the GI correction at each node passage
+Resume: "derive Saturn solo nodal sign and amplitude from post-GI residual
+— Note 24 §8 formal derivation with GI-aware calibration"
 
-**4. Moon variation A3 from triad conductance (Note 25)**
+**4. Moon variation A3 from triad conductance**
 Hill factor 2.74× pending.
 Resume: "derive Moon A3 as eigenvalue of Hill intermediate orbit"
 
 **5. Rahu second-order correction**
-4.2% residual. Pending SE node flag clarification first.
-Resume: "derive second-order Rahu amplitude — Delaunay expansion at m²"
+4.2% residual — lower priority until Rahu base error is understood.
 
 ---
 
@@ -279,18 +293,17 @@ Resume: "derive second-order Rahu amplitude — Delaunay expansion at m²"
 
 | Version | Bug | Fix |
 |---------|-----|-----|
-| v4 | Duplicate getRahuLongitude() — mean node overriding true node (1.7° above floor) | Removed |
-| v4 | btnRosette nested in btnHelio | Moved to top level |
-| v4 | getHelioAngle() mean longitude only | Rebuilt on helioXY() |
+| v4 | Duplicate getRahuLongitude() | Removed |
+| v4 | btnRosette nested in btnHelio | Top level |
+| v4 | getHelioAngle() mean longitude | Rebuilt on helioXY() |
 | v4 | ayanamsha() implied IAU Lahiri | Renamed structuralAyanamsha() |
 | v4 | Planet table silent in helio mode | Banner added |
-| v5 | 15-term Meeus Moon | Note 25 4-term stand-alone |
+| v5 | 15-term Meeus Moon | Note 25 4-term engine |
 | v5 | 5-term Meeus Rahu | Note 25 conductance derivation |
-| v5 | dw/dt claimed as Note 8 derivation | Correctly labeled empirical BC |
-| v6 | J→E/J→M/S→M retained below floor | Removed per CP |
-| v6 | Dependency map incomplete | Three-category honest map |
-| v7 | Moon A4 term missing — error budget 0.862° stated as 0.580° | A4 added; budget corrected to 0.648°; audit confirms 0.616° ✓ |
-| v8 | Solo nodal correction stacks with GI near ascending node — 1.296° error at 2004-03-23 where base alone is only 0.070° | Solo disabled; Saturn predicted ~0.700° (base + GI only) pending re-audit and Note 24 formal derivation |
+| v5 | dw/dt claimed as Note 8 | Correctly labeled empirical BC |
+| v6 | J→E/J→M/S→M below floor | Removed per CP |
+| v7 | Moon A4 missing — error budget wrong | A4 added; Moon 0.616° ✓ |
+| v8 | Solo stacking with GI near node | Solo disabled; documented as Note 24 open thread |
 
 ---
 
@@ -299,17 +312,20 @@ Resume: "derive second-order Rahu amplitude — Delaunay expansion at m²"
 | Version | Date | Key changes |
 |---------|------|-------------|
 | v1-v3 | Mar 2026 | Keplerian base, GI, SR/SD, rosette |
-| v4 | Mar 2026 | Saturn Layer 2; Rahu true node; helio engine; ayanamsha rename; gear back face |
+| v4 | Mar 2026 | Saturn Layer 2; Rahu true node; helio engine; ayanamsha; gear back |
 | v5 | Mar 2026 | Moon + Rahu → Note 25; dw/dt relabeled |
-| v6 | Mar 2026 | J→E/J→M/S→M removed per CP; full audit |
-| v7 | Mar 2026 | Moon A4 term added (0.2136° × sin(2Mp)); Moon now inside floor (0.616°) |
-| v8 | Mar 2026 | Solo nodal correction disabled — stacks with GI at 2004-03-23 node passage; Saturn predicted ~0.700° |
+| v6 | Mar 2026 | J→E/J→M/S→M removed per CP |
+| v7 | Mar 2026 | Moon A4 added — Moon inside floor (0.616°) |
+| v8 | Mar 2026 | Solo disabled — stacks with GI; Saturn 1.296° → 1.142° |
 
 ---
 
-*Confirmed inside sigma floor (0.6475°) over 2000–2026 audit window (v7/v8):*  
+*Confirmed inside sigma floor (0.6475°) over 2000–2026:*  
 *Sun (0.374°), Moon (0.616°), Mercury (0.630°), Venus (0.499°), Mars (0.386°)*
 
-*Near-threshold: Jupiter (0.729° — 0.054° over floor)*  
-*Near-threshold predicted: Saturn (~0.700° in v8 — solo disabled, pending re-audit)*  
-*Open: Rahu (3.321° — SE node flag investigation pending)*
+*Near-threshold: Jupiter (0.729° — 0.054° over; dw/dt derivation is the fix)*
+
+*Structural limitation: Saturn (1.142° — GI amplitude 0.812° > floor;*  
+*floor violation unavoidable when GI fires in wrong direction)*
+
+*Under investigation: Rahu (3.321° — spot-check pending)*
