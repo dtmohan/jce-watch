@@ -399,9 +399,11 @@
         <span style="color:var(--moon)">●</span> Moon · <span style="color:var(--sun)">●</span> Sun<br>
         <span style="color:var(--mercury)">●</span> ☿ · <span style="color:var(--venus)">●</span> ♀ · <span style="color:var(--mars)">●</span> ♂ · <span style="color:var(--jupiter)">●</span> ♃ · <span style="color:var(--saturn)">●</span> ♄<br>
         <span style="color:var(--ketu)">◌ ℞</span> Retrograde (Ketu zero-crossing)<br>
-        <span style="color:#4CA8C9">━ GC-N</span> Galactic crossing N (Note 5)<br>
-        <span style="color:#C94C6A">━ GC-S</span> Galactic crossing S / Mula<br>
+        <span style="color:#4CA8C9">━ GC-N</span> Galactic crossing N · 66° (Note 5)<br>
+        <span style="color:#C94C6A">━ Node</span> Ecliptic-galactic node · 246.2° (Note 18)<br>
+        <span style="color:#E8A0C9">━ Sgr A*</span> Galactic center · 243.0° (Note 18)<br>
         <span style="color:#F5E5A0">◆</span> Exaltation degrees · <span style="color:#F5E5A0">✦</span> Abhijit band<br>
+        <span style="color:#A0C4FF">⬡</span> Anchor nak (Note 13): Mula · Pushya · Chitra · Ardra · Mrg<br>
         <em style="font-size:11px;">Face tilted 23.44° · Sidereal = Lahiri ayanamsha</em>
       </div>
     </div>
@@ -656,12 +658,14 @@ function isRetrograde(body, days) {
   return diff < 0;
 }
 
-// ── JCE Structural Constants (all sidereal degrees, from Notes 1–7)
-// Galactic-ecliptic crossings (Note 5)
+// ── JCE Structural Constants (all sidereal degrees, from Notes 1–18)
+// Galactic-ecliptic crossings (Note 5 / Note 18 two-layer refinement)
 const GALACTIC_CROSSINGS = [
-  { lon: 66.0,  label: 'GC-N', color: '#4CA8C9', note: 'Summer solstice galactic crossing\nRahu exaltation region\nEcliptic enters galactic N. hemisphere' },
-  { lon: 246.0, label: 'GC-S', color: '#C94C6A', note: 'Winter solstice galactic crossing\nKetu/Mula — galactic center direction\nSgr A* at 242.84° (Mula pada 1)' },
+  { lon: 66.0,  label: 'GC-N', color: '#4CA8C9', note: 'Summer galactic crossing · Rahu exaltation · Ecliptic enters galactic N. hemisphere' },
+  { lon: 246.2, label: '⊗',    color: '#C94C6A', note: 'Ecliptic-galactic node (Layer A, Note 18) · 246.2° sidereal' },
 ];
+// Layer B: Sgr A* actual galactic center (Note 18) — 3.2° inside the ecliptic node
+const SGR_A_LON = 243.0;  // sidereal degrees
 
 // Exaltation degrees (Note 5/6) — sidereal
 const EXALT_DEGREES = [
@@ -700,6 +704,18 @@ const NAKSHATRA_NAMES = [
   'Mula','Purva Ashadha','Uttara Ashadha','Shravana','Dhanishtha',
   'Shatabhisha','Purva Bhadrapada','Uttara Bhadrapada','Revati'
 ];
+
+// ── Anchor Nakshatras (Note 13) — galactic frame waypoints
+// These are the five nakshatras structurally anchored to galactic features.
+// They serve as the reference frame for the nodal transit schedule (Note 17).
+const ANCHOR_NAKSHATRAS = {
+  'Mrigashira':  { idx: 4,  galactic: 'GAC lower bracket',  star: 'Betelgeuse', color: '#A0C4FF', note: '53°–67° · Betelgeuse · GAC lower bracket' },
+  'Ardra':       { idx: 5,  galactic: 'GAC upper bracket',  star: 'Rigel',      color: '#A0C4FF', note: '67°–80° · Rigel · GAC upper bracket (calibration epoch VE)' },
+  'Pushya':      { idx: 7,  galactic: 'σ-floor / Sirius',   star: 'Sirius',     color: '#FFD97A', note: '100°–113° · Sirius · σ-floor anchor' },
+  'Chitra':      { idx: 13, galactic: 'Autumnal equinox',   star: 'Spica',      color: '#C9A84C', note: '173°–187° · Spica · exact autumnal equinox crossing' },
+  'Mula':        { idx: 18, galactic: 'Galactic Center',    star: 'Sgr A*',     color: '#C94C6A', note: '240°–253° · Sgr A* · galactic root (primary anchor)' },
+};
+const ANCHOR_NAK_SPAN = 360 / 27;  // 13.333°
 
 // Vimshottari dasha years in lord order
 const DASHA_YEARS = { Ketu:7, Venus:20, Sun:6, Moon:10, Mars:7, Rahu:18, Jupiter:16, Saturn:19, Mercury:17 };
@@ -1149,6 +1165,68 @@ function drawWatch(days) {
   ctx.beginPath(); ctx.arc(CX, CY, ZODIAC_OUTER, 0, TWO_PI);
   ctx.stroke();
 
+  // ── Anchor nakshatra arcs (Note 13) — galactic frame waypoints
+  // Always drawn faintly; illuminate when Moon is in that nakshatra
+  {
+    const moonSidForAnchors = getSiderealAngle('moon', days);
+    const moonNak = getNakshatra(moonSidForAnchors);
+    const R_ANC_INNER = ZODIAC_INNER - 6;
+    const R_ANC_OUTER = ZODIAC_INNER - 1;
+
+    Object.entries(ANCHOR_NAKSHATRAS).forEach(([name, anc]) => {
+      const startDeg = anc.idx * ANCHOR_NAK_SPAN;
+      const endDeg   = startDeg + ANCHOR_NAK_SPAN;
+      const a1 = (startDeg + beltOffset - 90) * DEG;
+      const a2 = (endDeg   + beltOffset - 90) * DEG;
+      const isMoonHere = moonNak.name.replace(' ✦','') === name;
+
+      // Arc fill
+      ctx.beginPath();
+      ctx.arc(CX, CY, R_ANC_OUTER, a1, a2);
+      ctx.arc(CX, CY, R_ANC_INNER, a2, a1, true);
+      ctx.closePath();
+      ctx.fillStyle = anc.color;
+      ctx.globalAlpha = isMoonHere ? 0.35 : 0.07;
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Arc border
+      ctx.beginPath();
+      ctx.arc(CX, CY, R_ANC_OUTER, a1, a2);
+      ctx.strokeStyle = anc.color;
+      ctx.lineWidth = isMoonHere ? 1.2 : 0.5;
+      ctx.globalAlpha = isMoonHere ? 0.8 : 0.2;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+
+      // Small radial tick at start boundary (structural marker)
+      ctx.beginPath();
+      ctx.moveTo(CX + (R_ANC_INNER - 3) * Math.cos(a1), CY + (R_ANC_INNER - 3) * Math.sin(a1));
+      ctx.lineTo(CX + (R_ANC_OUTER + 3) * Math.cos(a1), CY + (R_ANC_OUTER + 3) * Math.sin(a1));
+      ctx.strokeStyle = anc.color;
+      ctx.lineWidth = 0.8;
+      ctx.globalAlpha = isMoonHere ? 0.7 : 0.18;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+
+      // Label: first letter of star name at mid-arc, only when Moon is here or at slowest speeds
+      if (isMoonHere || speedIdx <= 1) {
+        const midAngle = (startDeg + ANCHOR_NAK_SPAN / 2 + beltOffset - 90) * DEG;
+        const labelR = (R_ANC_INNER + R_ANC_OUTER) / 2;
+        ctx.save();
+        ctx.translate(CX + labelR * Math.cos(midAngle), CY + labelR * Math.sin(midAngle));
+        ctx.rotate(midAngle + Math.PI / 2);
+        ctx.font = `bold ${isMoonHere ? 7 : 5.5}px Cinzel, serif`;
+        ctx.fillStyle = anc.color;
+        ctx.globalAlpha = isMoonHere ? 0.95 : 0.35;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(anc.star[0], 0, 0);  // first letter: S(irius), R(igel), B(etelgeuse), S(pica), S(gr A*)
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+      }
+    });
+  }
+
   // ── Abhijit band (Note 1) — 276°40' to 280°53'20" sidereal
   {
     const a1 = (ABHIJIT_START + beltOffset - 90) * DEG;
@@ -1175,28 +1253,88 @@ function drawWatch(days) {
     ctx.restore();
   }
 
-  // ── Galactic crossing markers (Note 5) — 66° and 246° sidereal
-  GALACTIC_CROSSINGS.forEach(gc => {
+  // ── Galactic crossing markers (Notes 5 + 18) — two-layer bezel on winter side
+  GALACTIC_CROSSINGS.forEach((gc, idx) => {
     const gcRad = (gc.lon + beltOffset - 90) * DEG;
-    const gcR1 = ZODIAC_INNER - 4;
-    const gcR2 = ZODIAC_OUTER + 4;
-    ctx.beginPath();
-    ctx.moveTo(CX + gcR1 * Math.cos(gcRad), CY + gcR1 * Math.sin(gcRad));
-    ctx.lineTo(CX + gcR2 * Math.cos(gcRad), CY + gcR2 * Math.sin(gcRad));
-    ctx.strokeStyle = gc.color;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.7;
-    ctx.stroke();
-    ctx.globalAlpha = 1.0;
-    // small label
-    ctx.save();
-    ctx.translate(CX + (gcR2 + 8) * Math.cos(gcRad), CY + (gcR2 + 8) * Math.sin(gcRad));
-    ctx.rotate(gcRad + Math.PI/2);
-    ctx.font = 'bold 7px Cinzel, serif';
-    ctx.fillStyle = gc.color;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(gc.label, 0, 0);
-    ctx.restore();
+
+    if (idx === 0) {
+      // GC-N (summer crossing, 66°) — single tick as before
+      const gcR1 = ZODIAC_INNER - 4;
+      const gcR2 = ZODIAC_OUTER + 4;
+      ctx.beginPath();
+      ctx.moveTo(CX + gcR1 * Math.cos(gcRad), CY + gcR1 * Math.sin(gcRad));
+      ctx.lineTo(CX + gcR2 * Math.cos(gcRad), CY + gcR2 * Math.sin(gcRad));
+      ctx.strokeStyle = gc.color;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.7;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+      ctx.save();
+      ctx.translate(CX + (gcR2 + 8) * Math.cos(gcRad), CY + (gcR2 + 8) * Math.sin(gcRad));
+      ctx.rotate(gcRad + Math.PI/2);
+      ctx.font = 'bold 7px Cinzel, serif';
+      ctx.fillStyle = gc.color;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(gc.label, 0, 0);
+      ctx.restore();
+
+    } else {
+      // ── Winter side: two-layer bezel (Note 18)
+      // Layer A: ecliptic-galactic NODE at 246.2° — outer bezel tick
+      const nodeRad = gcRad;
+      const outerFrom = ZODIAC_OUTER;
+      const outerTo   = ZODIAC_OUTER + 10;
+      ctx.beginPath();
+      ctx.moveTo(CX + outerFrom * Math.cos(nodeRad), CY + outerFrom * Math.sin(nodeRad));
+      ctx.lineTo(CX + outerTo   * Math.cos(nodeRad), CY + outerTo   * Math.sin(nodeRad));
+      ctx.strokeStyle = gc.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.85;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+      // Layer A label (outside bezel)
+      ctx.save();
+      ctx.translate(CX + (outerTo + 9) * Math.cos(nodeRad), CY + (outerTo + 9) * Math.sin(nodeRad));
+      ctx.rotate(nodeRad + Math.PI/2);
+      ctx.font = 'bold 7px Cinzel, serif';
+      ctx.fillStyle = gc.color;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Node', 0, 0);
+      ctx.restore();
+
+      // Layer B: Sgr A* at 243.0° — inner bezel tick
+      const sgrRad = (SGR_A_LON + beltOffset - 90) * DEG;
+      const innerFrom = ZODIAC_INNER;
+      const innerTo   = ZODIAC_INNER - 10;
+      ctx.beginPath();
+      ctx.moveTo(CX + innerFrom * Math.cos(sgrRad), CY + innerFrom * Math.sin(sgrRad));
+      ctx.lineTo(CX + innerTo   * Math.cos(sgrRad), CY + innerTo   * Math.sin(sgrRad));
+      ctx.strokeStyle = '#E8A0C9';  // softer magenta to distinguish from node
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.85;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+      // Layer B label (inside, along inner ring)
+      ctx.save();
+      ctx.translate(CX + (innerTo - 9) * Math.cos(sgrRad), CY + (innerTo - 9) * Math.sin(sgrRad));
+      ctx.rotate(sgrRad + Math.PI/2);
+      ctx.font = 'bold 6.5px Cinzel, serif';
+      ctx.fillStyle = '#E8A0C9';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Sgr A*', 0, 0);
+      ctx.restore();
+
+      // Connecting arc: faint zone from 243.0° to 246.2° on the zodiac inner ring
+      const arcA = (Math.min(SGR_A_LON, gc.lon) + beltOffset - 90) * DEG;
+      const arcB = (Math.max(SGR_A_LON, gc.lon) + beltOffset - 90) * DEG;
+      ctx.beginPath();
+      ctx.arc(CX, CY, ZODIAC_INNER - 2, arcA, arcB);
+      ctx.strokeStyle = '#C94C6A';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 0.25;
+      ctx.stroke();
+      ctx.globalAlpha = 1.0;
+    }
   });
 
   // ── Exaltation degree marks (Note 5/6) — tiny colored diamonds on belt inner edge
@@ -1627,8 +1765,8 @@ function drawWatch(days) {
     ctx.stroke();
   }
 
-  // ── Moon nakshatra arc (replaces old cyclic dasha arc)
-  {
+  // ── Moon nakshatra arc — only at 1 day/s or slower (meaningless at higher speeds)
+  if (speedIdx <= 3) {
     const moonSidNow = getSiderealAngle('moon', days);
     const nakNow = getNakshatra(moonSidNow);
     const R_NAK = R_FACE * 0.795;
@@ -1683,8 +1821,17 @@ function updateUI(days) {
     if (nakFastNote) nakFastNote.style.display = 'none';
     if (nakChanged) {
       _lastNakName = nak.name; _lastNakFrac = nak.frac;
+      // Check if this is an anchor nakshatra (Note 13)
+      const nakBaseName = nak.name.replace(' ✦','');
+      const anchor = ANCHOR_NAKSHATRAS[nakBaseName];
+      const anchorFlag = anchor
+        ? `<div style="margin-top:6px;padding:4px 8px;border:1px solid ${anchor.color}33;border-left:2px solid ${anchor.color};background:${anchor.color}11;border-radius:2px;">
+             <span style="font-family:'Cinzel',serif;font-size:9px;color:${anchor.color};letter-spacing:0.15em;text-transform:uppercase;">⬡ Galactic Anchor</span>
+             <div style="font-size:10px;color:${anchor.color}CC;margin-top:2px;font-style:italic;">${anchor.galactic} · ${anchor.star}</div>
+           </div>`
+        : '';
       document.getElementById('liveNakDisp').innerHTML =
-        `<span style="color:${DASHA_COLORS[nak.lord]}">${nak.name}</span>`;
+        `<span style="color:${DASHA_COLORS[nak.lord]}">${nak.name}</span>${anchorFlag}`;
       document.getElementById('liveLordDisp').textContent =
         `Lord: ${nak.lord} · ${(nak.frac * 100).toFixed(1)}% through`;
       document.getElementById('liveFracFill').style.width = (nak.frac * 100).toFixed(1) + '%';
@@ -1704,8 +1851,13 @@ function updateUI(days) {
     if (nakFastNote) nakFastNote.style.display = 'none';
     if (nakChanged) {
       _lastNakName = nak.name; _lastNakFrac = nak.frac;
+      const nakBaseName = nak.name.replace(' ✦','');
+      const anchor = ANCHOR_NAKSHATRAS[nakBaseName];
+      const anchorMark = anchor
+        ? ` <span style="color:${anchor.color};font-size:9px;" title="${anchor.galactic}">⬡</span>`
+        : '';
       document.getElementById('liveNakDisp').innerHTML =
-        `<span style="color:${DASHA_COLORS[nak.lord]}">${nak.name}</span> ` +
+        `<span style="color:${DASHA_COLORS[nak.lord]}">${nak.name}</span>${anchorMark} ` +
         `<em style="color:var(--dim);font-size:10px;">· ${nak.lord}</em>`;
     }
   } else {
