@@ -1199,25 +1199,6 @@ function jdToDate(jd) {
   return `${day} ${MONTHS[month-1]} ${year}`;
 }
 
-function getDasha(days) {
-  // days since J2000; map to 120-yr cycle
-  const years = days / 365.2564;
-  const cycleYears = ((years % DASHA_TOTAL) + DASHA_TOTAL) % DASHA_TOTAL;
-  let accum = 0;
-  for (let i = 0; i < DASHA.length; i++) {
-    accum += DASHA[i].years;
-    if (cycleYears < accum) {
-      const start = accum - DASHA[i].years;
-      const elapsed = cycleYears - start;
-      const frac = elapsed / DASHA[i].years;
-      const remaining = DASHA[i].years - elapsed;
-      const next = DASHA[(i + 1) % DASHA.length];
-      return { lord: DASHA[i].lord, years: DASHA[i].years,
-               color: DASHA[i].color, frac, remaining, next: next.lord };
-    }
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // DRAWING
 // ═══════════════════════════════════════════════════════════════════════════
