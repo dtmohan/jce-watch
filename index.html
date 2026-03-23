@@ -512,12 +512,28 @@ function GI_amplitude(days) {
 // Candidate formula from Note 24 §8. Formal derivation deferred.
 const I_SATURN_RAD = 2.49 * DEG;  // Saturn orbital inclination — empirical BC
 const ME_MS = 1 / 95.159;          // Earth/Saturn mass ratio — empirical BC
-const T_ZOD = 25920.0;             // precessional year — Note 9
-const ALPHA  = 15.4002;            // T3/T2 — Note 3
+// T_ZOD_OVER_ALPHA: the T_zod/α ratio from Note 24 §8 and Note 9 GI formula.
+// In Note 9: GI = δ_J × δ_S × (M_J/M_S) × (T_zod/α) × (180/π) = 0.81151°
+// Solving: T_zod/α = GI / (δ_J × δ_S × M_J/M_S × 180/π) = 171.85
+// Note 24 states 171.89 — consistent to 0.02%.
+// IMPORTANT: T_zod/α ≈ 171.85 is NOT T3/α = 25920/15.4002 = 1683.
+// T_zod ≈ 2647 yr — a period internal to the GI formula calibration.
+// Using T3 = 25920 gives 10× overcorrection — the v10.0 bug (7° instead of 0.7°).
+const I_JUPITER_RAD = 1.30 * DEG;
+const MJ_MS = 3.340;
+const T_ZOD_OVER_ALPHA = GI_J2000 / (
+  Math.sin(23.4392911*DEG) * Math.sin(23.4392911*DEG) * Math.sin(I_JUPITER_RAD) *
+  Math.sin(23.4392911*DEG) * Math.sin(23.4392911*DEG) * Math.sin(I_SATURN_RAD) *
+  MJ_MS * (180/Math.PI)
+);  // = 171.85 — derived from GI_J2000 calibration, consistent with Note 24 §8
+
 function soloSaturnAmp(days) {
+  // Solo_S(t) = δ_S(t) × (M_E/M_S) × (T_zod/α) × (180/π)  [Note 24 §8]
+  // δ_S(t) = sin²(ε(t)) × sin(i_Saturn) — time-varying via dynamic obliquity
   const sinObl = Math.sin(obliquity(days));
   const deltaS = sinObl * sinObl * Math.sin(I_SATURN_RAD);
-  return deltaS * ME_MS * (T_ZOD / ALPHA) * (180 / Math.PI);
+  return deltaS * ME_MS * T_ZOD_OVER_ALPHA * (180 / Math.PI);
+  // At J2000: ≈ 0.711° (Note 24 candidate: 0.714°, within 0.4%)
 }
 
 // Legacy constant for any code still referencing OBLIQUITY directly
