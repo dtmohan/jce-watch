@@ -440,37 +440,88 @@
 
 // ── DEPENDENCY MAP ──────────────────────────────────────────────────────────
 // JCE-native (derived from framework first principles):
-//   GI J→S (-0.812°, Note 9) — 1.25× above σ floor, correctly retained
-//   GI S→J (+0.332°, Note 9) — 0.51× σ floor — borderline; kept per Note 9
-//   Saturn solo nodal (±0.714° candidate, Note 24)
-//   Moon longitude (Note 25: 3-term, CP-truncated, stand-alone)
-//   Rahu mean node (v9: mean node only, 0.005° vs SE mean — inside floor)
+//   GI J→S (Note 9, dynamic: GI(t)=0.81151°×(sin(ε(t))/sin(ε₀))⁴)
+//   GI S→J (Note 9, dynamic, same sin⁴ scaling)
+//   Saturn solo nodal (Note 24 §8, v10: geocentric gate, 89.815°/269.815°,
+//     dynamic amplitude Solo_S(t), conservative sign pending formal derivation)
+//   Moon longitude (Note 25: 4-term, CP-truncated, stand-alone)
+//   Rahu mean node (v9: mean node only, 0.005° vs SE mean — inside σ floor)
 //   Structural ayanamsha (Note 13)
 //   Galactic markers, Abhijit, Vimshottari (Notes 1,5,11,13,17,18)
+//   Dynamic obliquity: obliquity(days) = 23.4392911° − 0.013004167°×T (v10)
 //
-// CP-truncated at zero (below σ floor = aliasing noise, not signal):
+// CP-truncated at zero (below σ floor = aliasing noise):
 //   J→Earth (0.183°), J→Mars (0.073°), S→Mars (0.012°) — all < 0.6475°
-//   Combined 0.268° < σ floor — correctly removed, not approximated.
-//   The Rishis did not correct for these. The nakshatra frame absorbs them.
 //
-// Empirical BCs (accepted same status as obliquity — observed, not derived):
-//   Epoch elements L0, e, w at J2000 for all planets
-//   dw/dt apsidal rates — inside σ floor over ±34yr; retained for multi-decade use
-//   Mars de/dt = -0.00013/cy
-//   Mass ratios M_J/M_S, M_E/M_S
+// Empirical BCs (accepted same status as obliquity):
+//   Epoch elements L0, e, w at J2000; dw/dt apsidal rates; mass ratios; Mars de/dt
 //
-// Audit reference: pyswisseph/Moshier — validation oracle only.
+// v10 changes from v9:
+//   1. obliquity(days) function — replaces fixed J2000 constant
+//   2. GI_amplitude(days) — sin⁴(ε(t)) scaling, structurally honest
+//   3. Saturn solo re-enabled: geocentric gate, 89.815°/269.815° (Note 12),
+//      dynamic Solo_S(t), conservative sign rule
+//
+// Audit reference: pyswisseph/Moshier, Swiss Ephemeris — validation oracle only.
 //
 // Open threads (priority order):
-//   1. Derive dw/dt apsidal rates from conductance integral (6 planets)
-//      Becomes relevant beyond ~35yr simulation span
-//   2. Derive Saturn solo nodal amplitude formally (Note 24 §8)
-//   3. Derive Moon variation A3 from triad conductance (Hill 2.74×)
-//   4. Derive Rahu second-order correction (4.2% residual)
+//   1. Formal Saturn solo sign rule from Note 24 §8 conductance derivation
+//   2. dw/dt apsidal rates from Laplace coefficient conductance integral (>35yr)
+//   3. Moon variation A3 from triad conductance (Hill 2.74×)
+//   4. Rahu second-order correction (4.2% residual)
 // ────────────────────────────────────────────────────────────────────────────
 
 const TWO_PI = Math.PI * 2;
 const DEG = Math.PI / 180;
+
+// ── Dynamic obliquity (v10) ────────────────────────────────────────────────
+// Earth's axial tilt decreases slowly. IAU formula (valid ±centuries from J2000):
+//   ε(t) = 23.4392911° − 0.013004167° × T  where T = Julian centuries from J2000
+// Rate: −0.013004167°/cy = −46.82"/cy (standard IAU value)
+//
+// Why dynamic obliquity matters:
+//   - Note 21: phase coupling v/c ∝ cos(ε)/ε — time-varying
+//   - Note 24: Solo_S(t) = sin²(ε(t)) × sin(i_S) × (M_E/M_S) × (T_zod/α) × (180/π)
+//   - Note 12: calibration epoch 4491 BCE had ε = 24.28° (+0.84° from J2000 = 1.3× σ floor)
+//   - GI amplitude: scales as sin⁴(ε) — slowly varying but structurally honest
+//
+// Over 26yr audit window: drift = 0.003° (0.005× σ floor) — negligible for current audit.
+// Structurally required for historical epoch calculations and formal derivations.
+function obliquity(days) {
+  return (23.4392911 - 0.013004167 * (days / 36525.0)) * DEG;
+}
+
+// ── GI amplitude (v10) ────────────────────────────────────────────────────
+// GI amplitude scales as sin⁴(ε) since δ_J and δ_S each contain sin²(ε).
+// GI(t) = GI_J2000 × (sin(ε(t)) / sin(ε_J2000))⁴
+// At J2000: GI = 0.81151° (Note 9, verified 0.06% residual)
+// Over 26yr: changes < 0.001° — negligible.
+// For historical epochs (e.g. 4491 BCE): GI was ~0.927°.
+// This is the structurally honest time-varying form.
+const GI_J2000 = 0.81151;  // degrees, Note 9 verified
+const OBL_J2000_SIN = Math.sin(23.4392911 * DEG);
+function GI_amplitude(days) {
+  const sinObl = Math.sin(obliquity(days));
+  const ratio = sinObl / OBL_J2000_SIN;
+  return GI_J2000 * ratio * ratio * ratio * ratio;
+}
+
+// ── Solo Saturn correction amplitude (v10) ────────────────────────────────
+// Solo_S(t) = δ_S(t) × (M_E/M_S) × (T_zod/α) × (180/π)
+// where δ_S(t) = sin²(ε(t)) × sin(i_Saturn)  [Note 8, now time-varying]
+// Candidate formula from Note 24 §8. Formal derivation deferred.
+const I_SATURN_RAD = 2.49 * DEG;  // Saturn orbital inclination — empirical BC
+const ME_MS = 1 / 95.159;          // Earth/Saturn mass ratio — empirical BC
+const T_ZOD = 25920.0;             // precessional year — Note 9
+const ALPHA  = 15.4002;            // T3/T2 — Note 3
+function soloSaturnAmp(days) {
+  const sinObl = Math.sin(obliquity(days));
+  const deltaS = sinObl * sinObl * Math.sin(I_SATURN_RAD);
+  return deltaS * ME_MS * (T_ZOD / ALPHA) * (180 / Math.PI);
+}
+
+// Legacy constant for any code still referencing OBLIQUITY directly
+// (face tilt display etc.) — use J2000 value for display geometry
 const OBLIQUITY = 23.4392911 * DEG;
 
 // Heliocentric orbital elements at J2000.0
@@ -704,40 +755,98 @@ function helioXY(key, days) {
   let giCorr = 0;
 
   if (key === 'jupiter') {
-    // J-S GI reciprocal (Note 9)
+    // J-S GI reciprocal (Note 9) — dynamic amplitude via obliquity(days)
+    // S→J amplitude = GI × (M_S/M_J) = GI × (1/3.340)
     const phi_GI = (5 * L_J - 2 * L_S) * DEG;
-    giCorr = 0.332 * Math.sin(phi_GI);
+    giCorr = (GI_amplitude(days) / 3.340) * Math.sin(phi_GI);
 
   } else if (key === 'saturn') {
-    // ── Layer 1: J-S GI dominant (Note 9, verified 0.812°)
+    // ── Layer 1: J-S GI dominant (Note 9) — dynamic amplitude
+    // GI(t) = GI_J2000 × (sin(ε(t))/sin(ε_J2000))⁴
+    // J2000 amplitude: 0.81151° verified 0.06% residual.
+    // Over 26yr: changes < 0.001° — audit results unaffected.
+    // Structurally honest for historical epochs (4491 BCE: GI ≈ 0.927°).
     const phi_GI = (5 * L_J - 2 * L_S) * DEG;
-    giCorr = -0.812 * Math.sin(phi_GI);
+    giCorr = -GI_amplitude(days) * Math.sin(phi_GI);
 
-    // ── Layer 2: Saturn solo nodal correction (Note 24 §8–9) — DISABLED v8
-    // Audit finding (2024-03-23 audit): the solo nodal correction stacks additively
-    // with the GI correction near the ascending node (Saturn ~77.78° sidereal, 11.22°
-    // from node), causing a 1.296° total error where base alone is only 0.07°.
+    // ── Layer 2: Saturn solo nodal correction (Note 24 §8–9) — v10 re-enabled
     //
-    //   Base error at 2004-03-23:     +0.070° (base engine is correct)
-    //   GI correction:                +0.761° (formally derived, Note 9 — do not change)
-    //   Base + GI:                    +0.697° (just above σ floor)
-    //   Solo correction (v7):         +0.595° (same direction — stacks, not compensates)
-    //   Full error:                   +1.296°
+    // AUDIT HISTORY:
+    //   v7: solo enabled with HELIOCENTRIC gate, fixed positive sign → stacked with GI
+    //       2004-03-23: base+GI already +0.697°, solo added +0.595° → total +1.296°
+    //   v8/v9: solo disabled — Saturn max error ~1.142° (GI phase problem dominant)
     //
-    // The solo correction was calibrated against raw residuals BEFORE the GI correction
-    // was applied. Applied AFTER the GI, it double-counts near nodes where GI already
-    // overshoots the base error.
+    // V10 FIXES (from Note 24 §9 and full paper review):
+    //   Fix 1 — GEOCENTRIC gate: Note 24 §9 explicitly says "fires when Saturn's
+    //     GEOCENTRIC longitude is within a defined window." The heliocentric mean
+    //     longitude was wrong. Geocentric can differ from heliocentric by up to 6°
+    //     near opposition, shifting which dates the correction fires.
+    //   Fix 2 — CORRECTED NODE POSITIONS: Note 12 Table 1 gives Saturn ascending
+    //     node = 89.815° sidereal (not 89°). Both nodes are 0.185° from the Summer/
+    //     Winter Solstice crossings (90°/270°), within half a δ_S correction term.
+    //     Note 24 §5.2 Table 3 confirms the framework approximation as 89°; Note 12
+    //     gives the precise value. Using 89.815°/269.815° for both accuracy and
+    //     structural honesty (the solstice crossing, not GC-N + obliquity).
+    //   Fix 3 — DYNAMIC AMPLITUDE: Solo_S(t) = δ_S(t) × (M_E/M_S) × (T_zod/α) × (180/π)
+    //     where δ_S(t) uses obliquity(days) — now correctly time-varying.
     //
-    // Correct behaviour: solo correction should oppose the GI overshoot near nodes.
-    // The sign must be derived from the full residual after GI, not from the raw residual.
-    // This requires the formal Note 24 derivation (open thread priority 2).
+    // SIGN: The empirical residuals in Note 24 §5.2 are NEGATIVE near nodes (watch
+    //     behind SE). The solo correction was designed to be positive (push forward).
+    //     The stacking problem occurred because the GI sometimes overshoots in the
+    //     same direction. Until the formal Note 24 §8 derivation gives the sign rule
+    //     from first principles, we implement a CONSERVATIVE version:
+    //     solo fires only when the GI correction is also negative (same direction as
+    //     the empirical residuals Note 24 identified), preventing the stacking failure.
     //
-    // With solo disabled: Saturn max error = ~0.700° (base + GI only at 2004-03-23).
-    // This is 0.054° above the σ floor — same margin as Jupiter's current miss.
-    // Honest documented limitation until Note 24 formal derivation is complete.
+    // Node positions from Note 12 Table 1 (precise J2000 values):
+    //   Ascending node Ω_S = 89.815° — 0.185° from Summer Solstice crossing (90°)
+    //   Descending node   = 269.815° — 0.185° from Winter Solstice crossing (270°)
+    //   Both within σ floor of the solstice crossings. Structurally: Saturn's nodal
+    //   axis IS the solstice axis (Note 12 §2 key finding).
     //
-    // Resume keyword: "derive Saturn solo nodal correction sign and amplitude
-    // from full residual after GI correction — Note 24 §8 formal derivation"
+    {
+      // Use GEOCENTRIC sidereal Saturn (Note 24 §9 explicit requirement)
+      // Computed from the pre-correction heliocentric position (L + eqc, before giCorr)
+      // using the Earth heliocentric vector. Avoids circular call (getAngle→helioXY→...).
+      // Using pre-correction position is also correct structurally: the gate determines
+      // whether Saturn is near the nodal crossing, which is a property of its orbital
+      // position, not of the corrected display position.
+      const preCorr_lon_rad = (L + eqc / DEG) * DEG;  // heliocentric true lon (no giCorr)
+      const preCorr_r = o.a * (1 - e*e) / (1 + e * Math.cos(Mrad + eqc));
+      const earth_xy = helioXY('earth', days);
+      const gx = preCorr_r * Math.cos(preCorr_lon_rad) - earth_xy.x;
+      const gy = preCorr_r * Math.sin(preCorr_lon_rad) - earth_xy.y;
+      const satGeoTropical = ((Math.atan2(gy, gx) / DEG) % 360 + 360) % 360;
+      const satSid = ((satGeoTropical - structuralAyanamsha(days)) % 360 + 360) % 360;
+
+      const angSep = (node, sid) => {
+        let d = Math.abs(sid - node);
+        if (d > 180) d = 360 - d;
+        return d;
+      };
+
+      const NODE_WIN  = 30;         // degree window (Note 24 §9 Step 1)
+      // Precise node positions from Note 12 Table 1
+      const NODE_ASC  = 89.815;    // Summer Solstice crossing − 0.185° (Note 12)
+      const NODE_DESC = 269.815;   // Winter Solstice crossing − 0.185° (Note 12)
+      const d_asc  = angSep(NODE_ASC,  satSid);
+      const d_desc = angSep(NODE_DESC, satSid);
+
+      if (d_asc < NODE_WIN || d_desc < NODE_WIN) {
+        const dist = Math.min(d_asc, d_desc);
+        const taper = Math.cos(dist * Math.PI / (2 * NODE_WIN));
+        const amp = soloSaturnAmp(days);  // dynamic obliquity (Note 24 + v10)
+
+        // Conservative sign rule: only fire when GI is pushing Saturn backward
+        // (phi_GI > 0 means sin(phi_GI) > 0 means GI is negative for Saturn).
+        // This prevents the stacking failure while preserving Note 24's intent.
+        // Full sign derivation deferred to Note 24 §8 formal work.
+        if (Math.sin(phi_GI) > 0) {
+          giCorr += amp * taper;  // solo pushes forward when GI pushes back
+        }
+        // When GI pushes forward (sin<0), solo does not fire — avoids stacking
+      }
+    }
 
   } else if (key === 'earth') {
     // CP ANALYSIS: Jupiter→Earth coupling amplitude = 0.183°
