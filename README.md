@@ -2,7 +2,7 @@
 
 **Interactive simulation companion to:**
 *From Position to Phase: A Graph-Theoretic Architecture for Planetary Timekeepers*
-Deepak T. Mohan · Helical Imperative Research · ORCID [0000-0001-8054-2085](https://orcid.org/0000-0001-8054-2085)
+Deepak T. Mohan · Helical Imperative Research · ORCID [0009-0003-7535-4647](https://orcid.org/0009-0003-7535-4647)
 
 🔭 **[Open the simulation](https://dtmohan.github.io/jce-watch/)**
 📄 **[Read the paper](https://doi.org/10.5281/zenodo.19153008)**
