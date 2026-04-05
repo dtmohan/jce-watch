@@ -3,7 +3,7 @@
 **Companion simulation to:** *From Position to Phase: A Graph-Theoretic Architecture
 for Planetary Timekeepers* (Mohan, 2026)  
 **doi:** 10.5281/zenodo.19153008  
-**ORCID:** 0000-0001-8054-2085  
+**ORCID:** 0009-0003-7535-4647  
 **Simulation:** https://dtmohan.github.io/jce-watch/  
 **Code version:** v10 (March 2026)  
 **Last updated:** March 2026  
