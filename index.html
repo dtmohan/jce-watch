@@ -11,31 +11,31 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-–gold:    #C9A84C;
-–gold2:   #E8C96A;
-–gold3:   #F5E5A0;
-–ivory:   #F2ECD8;
-–copper:  #A0522D;
-–bg:      #080A0E;
-–bg2:     #0D1018;
-–panel:   #10141C;
-–text:    #C9A84C;
-–dim:     #5A4820;
-–rahu:    #4CA8C9;
-–ketu:    #C94C6A;
-–moon:    #B8C8E8;
-–sun:     #FFD97A;
-–mercury: #9ABCB0;
-–venus:   #D4A574;
-–mars:    #C96A4C;
-–jupiter: #C4A882;
-–saturn:  #A8B090;
+--gold:    #C9A84C;
+--gold2:   #E8C96A;
+--gold3:   #F5E5A0;
+--ivory:   #F2ECD8;
+--copper:  #A0522D;
+--bg:      #080A0E;
+--bg2:     #0D1018;
+--panel:   #10141C;
+--text:    #C9A84C;
+--dim:     #5A4820;
+--rahu:    #4CA8C9;
+--ketu:    #C94C6A;
+--moon:    #B8C8E8;
+--sun:     #FFD97A;
+--mercury: #9ABCB0;
+--venus:   #D4A574;
+--mars:    #C96A4C;
+--jupiter: #C4A882;
+--saturn:  #A8B090;
 }
 
 body {
-background: var(–bg);
-color: var(–ivory);
-font-family: ‘EB Garamond’, serif;
+background: var(--bg);
+color: var(--ivory);
+font-family: 'EB Garamond', serif;
 min-height: 100vh;
 display: flex;
 flex-direction: column;
@@ -48,27 +48,27 @@ header {
 width: 100%;
 text-align: center;
 padding: 32px 24px 12px;
-border-bottom: 1px solid var(–dim);
+border-bottom: 1px solid var(--dim);
 position: relative;
 }
 header::after {
-content: ‘’;
+content: '';
 position: absolute;
 bottom: 0; left: 10%; right: 10%;
 height: 1px;
-background: linear-gradient(90deg, transparent, var(–gold), transparent);
+background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
 .title-main {
-font-family: ‘Cinzel Decorative’, serif;
+font-family: 'Cinzel Decorative', serif;
 font-size: clamp(18px, 3vw, 28px);
-color: var(–gold);
+color: var(--gold);
 letter-spacing: 0.15em;
 text-transform: uppercase;
 }
 .title-sub {
-font-family: ‘Cinzel’, serif;
+font-family: 'Cinzel', serif;
 font-size: clamp(11px, 1.5vw, 14px);
-color: var(–dim);
+color: var(--dim);
 letter-spacing: 0.3em;
 margin-top: 6px;
 }
@@ -97,9 +97,9 @@ canvas {
 display: block;
 border-radius: 50%;
 box-shadow:
-0 0 0 2px var(–dim),
+0 0 0 2px var(--dim),
 0 0 0 6px #1A1608,
-0 0 0 8px var(–dim),
+0 0 0 8px var(--dim),
 0 0 60px rgba(201,168,76,0.15),
 0 0 120px rgba(201,168,76,0.05);
 }
@@ -114,38 +114,38 @@ padding-top: 8px;
 }
 
 .card {
-background: var(–panel);
-border: 1px solid var(–dim);
+background: var(--panel);
+border: 1px solid var(--dim);
 border-radius: 4px;
 padding: 16px 18px;
 position: relative;
 }
 .card::before {
-content: ‘’;
+content: '';
 position: absolute;
 top: 0; left: 8%; right: 8%;
 height: 1px;
-background: linear-gradient(90deg, transparent, var(–gold), transparent);
+background: linear-gradient(90deg, transparent, var(--gold), transparent);
 }
 .card-title {
-font-family: ‘Cinzel’, serif;
+font-family: 'Cinzel', serif;
 font-size: 10px;
 letter-spacing: 0.3em;
-color: var(–dim);
+color: var(--dim);
 text-transform: uppercase;
 margin-bottom: 12px;
 }
 
 /* Dasha display */
 .dasha-lord {
-font-family: ‘Cinzel Decorative’, serif;
+font-family: 'Cinzel Decorative', serif;
 font-size: 22px;
-color: var(–gold2);
+color: var(--gold2);
 letter-spacing: 0.1em;
 }
 .dasha-years {
 font-size: 13px;
-color: var(–dim);
+color: var(--dim);
 margin-top: 4px;
 font-style: italic;
 }
@@ -158,13 +158,13 @@ overflow: hidden;
 }
 .dasha-bar {
 height: 100%;
-background: linear-gradient(90deg, var(–gold), var(–gold2));
+background: linear-gradient(90deg, var(--gold), var(--gold2));
 border-radius: 2px;
 transition: width 0.5s ease;
 }
 .dasha-next {
 font-size: 12px;
-color: var(–dim);
+color: var(--dim);
 margin-top: 8px;
 font-style: italic;
 }
@@ -188,15 +188,15 @@ flex-shrink: 0;
 }
 .planet-name { flex: 1; }
 .planet-deg {
-font-family: ‘Cinzel’, serif;
+font-family: 'Cinzel', serif;
 font-size: 12px;
-color: var(–gold);
+color: var(--gold);
 min-width: 50px;
 text-align: right;
 }
 .planet-sign {
 font-size: 12px;
-color: var(–dim);
+color: var(--dim);
 min-width: 70px;
 text-align: right;
 font-style: italic;
@@ -210,22 +210,22 @@ gap: 10px;
 margin-top: 8px;
 }
 .ctrl-label {
-font-family: ‘Cinzel’, serif;
+font-family: 'Cinzel', serif;
 font-size: 10px;
 letter-spacing: 0.2em;
-color: var(–dim);
+color: var(--dim);
 white-space: nowrap;
 }
 input[type=range] {
 flex: 1;
-accent-color: var(–gold);
+accent-color: var(--gold);
 height: 3px;
 cursor: pointer;
 }
 .ctrl-val {
-font-family: ‘Cinzel’, serif;
+font-family: 'Cinzel', serif;
 font-size: 11px;
-color: var(–gold2);
+color: var(--gold2);
 min-width: 60px;
 text-align: right;
 }
@@ -237,9 +237,9 @@ margin-top: 10px;
 button {
 flex: 1;
 background: transparent;
-border: 1px solid var(–dim);
-color: var(–gold);
-font-family: ‘Cinzel’, serif;
+border: 1px solid var(--dim);
+color: var(--gold);
+font-family: 'Cinzel', serif;
 font-size: 10px;
 letter-spacing: 0.2em;
 padding: 8px 4px;
@@ -247,40 +247,40 @@ cursor: pointer;
 text-transform: uppercase;
 transition: all 0.2s;
 }
-button:hover { background: var(–dim); color: var(–ivory); border-color: var(–gold); }
-button.active { background: var(–gold); color: var(–bg); border-color: var(–gold2); }
+button:hover { background: var(--dim); color: var(--ivory); border-color: var(--gold); }
+button.active { background: var(--gold); color: var(--bg); border-color: var(--gold2); }
 
 /* Epoch display */
 .epoch {
-font-family: ‘Cinzel’, serif;
+font-family: 'Cinzel', serif;
 font-size: 13px;
-color: var(–gold2);
+color: var(--gold2);
 text-align: center;
 letter-spacing: 0.05em;
 }
 .epoch-sub {
 font-size: 11px;
-color: var(–dim);
+color: var(--dim);
 text-align: center;
 margin-top: 4px;
 font-style: italic;
 }
 
 /* Legend */
-.legend { font-size: 12px; color: var(–dim); line-height: 1.8; }
+.legend { font-size: 12px; color: var(--dim); line-height: 1.8; }
 
 /* Footer */
 footer {
 width: 100%;
 text-align: center;
 padding: 16px;
-border-top: 1px solid var(–dim);
+border-top: 1px solid var(--dim);
 font-size: 12px;
-color: var(–dim);
+color: var(--dim);
 font-style: italic;
 letter-spacing: 0.1em;
 }
-footer a { color: var(–gold); text-decoration: none; }
+footer a { color: var(--gold); text-decoration: none; }
 </style>
 
 </head>
@@ -379,11 +379,15 @@ footer a { color: var(–gold); text-decoration: none; }
 <div class="card">
   <div class="card-title">Natal Vimshottari MD · AD</div>
   <div style="font-size:10px;color:var(--dim);margin-bottom:10px;font-style:italic;line-height:1.5;">
-    Enter birth date &amp; time (your local time) for true Vimshottari with Abhijit correction
+    Enter birth date, birth clock time, and the UTC offset at birth for true Vimshottari with Abhijit correction
   </div>
   <div class="ctrl-row" style="gap:6px;flex-wrap:wrap;">
     <input type="date" id="birthDate" style="flex:1;background:#0D1018;border:1px solid var(--dim);color:var(--ivory);padding:5px 8px;font-family:'Cinzel',serif;font-size:11px;border-radius:2px;min-width:130px;">
     <input type="time" id="birthTime" value="12:00" style="width:85px;background:#0D1018;border:1px solid var(--dim);color:var(--ivory);padding:5px 8px;font-family:'Cinzel',serif;font-size:11px;border-radius:2px;">
+    <input type="text" id="birthUtcOffset" value="+00:00" inputmode="text" aria-label="UTC offset at birth" title="UTC offset at birth, for example +05:30 or -08:00" style="width:88px;background:#0D1018;border:1px solid var(--dim);color:var(--gold2);padding:5px 8px;font-family:'Cinzel',serif;font-size:11px;border-radius:2px;text-align:center;">
+  </div>
+  <div style="font-size:9px;color:var(--dim);margin-top:6px;font-style:italic;line-height:1.5;">
+    Use the historical offset at birth, e.g. <span style="color:var(--gold2)">+05:30</span> or <span style="color:var(--gold2)">-08:00</span>.
   </div>
   <div class="btn-row" style="margin-top:8px;">
     <button id="btnCalcNatal">Calculate</button>
@@ -1147,6 +1151,42 @@ function getVimshottari(moonSidLon, elapsedYears) {
 
 function dateToDays(date) {
   return (date.getTime() / 86400000) - 10957.5;
+}
+
+function formatUtcOffset(minutesEast) {
+  const sign = minutesEast >= 0 ? '+' : '-';
+  const abs = Math.abs(minutesEast);
+  const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+  const mm = String(abs % 60).padStart(2, '0');
+  return `${sign}${hh}:${mm}`;
+}
+
+function parseUtcOffset(offsetText) {
+  const normalized = (offsetText || '').trim();
+  const match = normalized.match(/^([+-])(\d{2}):?(\d{2})$/);
+  if (!match) return null;
+  const [, sign, hh, mm] = match;
+  const hours = Number(hh);
+  const minutes = Number(mm);
+  if (hours > 14 || minutes > 59) return null;
+  const total = hours * 60 + minutes;
+  return sign === '+' ? total : -total;
+}
+
+function parseBirthMoment(dateVal, timeVal, offsetVal) {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateVal || '');
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(timeVal || '');
+  const offsetMinutesEast = parseUtcOffset(offsetVal);
+  if (!dateMatch || !timeMatch || offsetMinutesEast === null) return null;
+
+  const [, year, month, day] = dateMatch;
+  const [, hour, minute] = timeMatch;
+  const utcMillis =
+    Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
+    - offsetMinutesEast * 60000;
+  const moment = new Date(utcMillis);
+  if (Number.isNaN(moment.getTime())) return null;
+  return { moment, offsetMinutesEast };
 }
 
 function getHelioAngle(body, days) {
