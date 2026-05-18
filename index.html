@@ -2664,6 +2664,23 @@ document.getElementById('btnCalcNatal').addEventListener('click', () => {
     res.innerHTML = '<span style="color:var(--ketu);font-size:11px;">Invalid date.</span>'; return;
   }
   const birthDays = dateToDays(birthDate);
+   // ── RANGE GUARD ──────────────────────────────────────────────
+  // JCE Moon engine (Note 25, 4-term) validated against SE files
+  // within approximately 1000–2100 CE. At T = −20 cy (1 CE),
+  // Moon longitude error vs SE = 22°, placing Moon in the wrong
+  // nakshatra and producing a completely incorrect Vimshottari result.
+  // Guard: reject dates outside ±10 cy of J2000 (roughly 1000–3000 CE).
+  const T_birth = birthDays / 36525.0;
+  if (T_birth < -10 || T_birth > 10) {
+    res.innerHTML = `<span style="color:var(--ketu);font-size:11px;">
+      Date outside engine validation range (approximately 1000–3000 CE).<br>
+      Moon position error grows to 22°+ at 1 CE — nakshatra assignment
+      would be wrong and the Vimshottari result unreliable.
+      Use pyswisseph directly for historical natal charts.
+    </span>`;
+    return;
+  }
+  // ── end range guard ──────────────────────────────────────────
   const nowDays   = dateToDays(new Date());
   const elapsedYrs = (nowDays - birthDays) / 365.2564;
   if (elapsedYrs < 0) {
